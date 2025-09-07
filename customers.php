@@ -54,8 +54,25 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <title>Manage Customers</title>
     <style>
+
+          :root {
+            --primary: #4a6cf7;
+            --primary-dark: #3a5ad9;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --sidebar-width: 230px;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
         body {
             margin: 0; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -63,30 +80,51 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
             height: 100vh; 
             background: #f3f4f6;
         }
-        .sidebar {
-            width: 230px; 
-            background: #007BFF; 
-            color: white; 
-            display: flex; 
-            flex-direction: column; 
-            padding-top: 20px;
-        }
-        .sidebar h2 {
-            text-align: center; 
-            margin-bottom: 30px; 
-            font-size: 22px;
-        }
-        .sidebar a {
-            color: white; 
-            padding: 12px 20px; 
-            text-decoration: none; 
-            display: block; 
-            transition: background 0.3s; 
-            border-radius: 6px; 
-            margin: 4px 10px;
-        }
-        .sidebar a:hover { background: #0056b3; }
+          /* Sidebar */
+       /* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    background: var(--primary);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    transition: var(--transition);
+    z-index: 1000;
+}
 
+.sidebar h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 22px;
+    padding: 0 15px;
+}
+
+.sidebar a {
+    color: white;
+    padding: 12px 20px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    transition: var(--transition);
+    border-radius: 6px;
+    margin: 4px 10px;
+}
+
+.sidebar a i {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
+
+.sidebar a:hover {
+    background: var(--primary-dark);
+}
+
+.sidebar a.active {
+    background: white;
+    color: var(--primary);
+}
         .main-content { 
             flex: 1; 
             padding: 25px; 
@@ -186,15 +224,14 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
 <body>
     <!-- Sidebar -->
     <div class="sidebar">
-        <h2>CRM</h2>
-        <a href="dashboard.php">📊 Dashboard</a>
-        <a href="customers.php">👥 Customers</a>
-        <?php if ($role === 'admin'): ?>
-            <a href="users.php">👤 Users</a>
-        <?php endif; ?>
-        <a href="logout.php">🚪 Logout</a>
+    <h2>CRM</h2>
+     <a href="dashboard.php"><i class="fas fa-chart-line"></i> <span>Dashboard</span></a>
+    <a href="customers.php" class="active"><i class="fas fa-users"></i> Customers</a>
+    <?php if ($role === 'admin'): ?>
+       <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
+    <?php endif; ?>
+    <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </div>
-
     <!-- Main Content -->
     <div class="main-content">
         <div class="header">
