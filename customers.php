@@ -14,6 +14,11 @@ $result = $conn->query($sql);
 $user    = $result->fetch_assoc();
 $role    = $user['role'];
 
+$sql_name = "SELECT name FROM users WHERE id='$user_id' LIMIT 1";
+$result_name = $conn->query($sql_name);
+$user_data = $result_name->fetch_assoc();
+$user_name = $user_data['name'];
+
 // ADD CUSTOMER
 if (isset($_POST['add_customer'])) {
     $name    = $_POST['name'];
@@ -131,16 +136,65 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
             overflow-y: auto; 
         }
         .header {
-            background: white; 
-            padding: 18px 25px; 
-            border-radius: 12px; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08); 
-            margin-bottom: 25px; 
-            display: flex; 
-            justify-content: space-between; 
+            background: white;
+            padding: 18px 25px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
             align-items: center;
         }
-        .header h2 { margin: 0; font-size: 24px; color: #333; }
+        
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .header-actions .notification {
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .header-actions .notification .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 11px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
         .card {
             background: white; 
             padding: 20px; 
@@ -235,9 +289,25 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
     <!-- Main Content -->
     <div class="main-content">
         <div class="header">
-            <h2>Manage Customers</h2>
-            <span>Welcome, <?= htmlspecialchars($_SESSION['name']); ?> 👋</span>
+            <h2>Manage Customer</h2>
+            <div class="header-actions">
+                <div class="notification" id="notificationBell">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="notificationCount">0</span>
+                    <div class="notification-dropdown" id="notificationDropdown"></div>
+                </div>
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <?php echo strtoupper(substr($user_name, 0, 1)); ?>
+                    </div>
+                    <div>
+                        <div style="font-weight: 500;"><?php echo htmlspecialchars($user_name); ?></div>
+                        <div style="font-size: 12px; color: var(--secondary);"><?php echo ucfirst($role); ?></div>
+                    </div>
+                </div>
+            </div>
         </div>
+        
 
         <!-- Add Customer Form -->
         <div class="card">
