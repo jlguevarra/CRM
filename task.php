@@ -6,7 +6,7 @@ include 'functions.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit();
 }
 
@@ -23,7 +23,7 @@ if ($result->num_rows > 0) {
 } else {
     // User not found in database, logout
     session_destroy();
-    header("Location: login.php");
+    header("Location: index.php");
     exit();
 }
 
