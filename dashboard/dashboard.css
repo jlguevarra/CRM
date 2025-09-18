@@ -440,4 +440,47 @@
             border-radius: 10px;
             font-size: 11px;
         }
-    </style>
+        .notification {
+    position: relative;
+    cursor: pointer;
+}
+
+.notification .badge {
+    background: red;
+    color: white;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+}
+
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    top: 30px;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    width: 250px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.notification:hover .notification-dropdown {
+    display: block;
+}
+
+.notification-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.notification-item small {
+    display: block;
+    font-size: 11px;
+    color: gray;
+}
+
+</style>

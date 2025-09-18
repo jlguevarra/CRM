@@ -356,12 +356,36 @@ function loadNotifications() {
     fetch('notifications.php')
         .then(res => res.json())
         .then(data => {
-            const count = data.count;
             const badge = document.getElementById('notificationCount');
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'inline-block' : 'none';
+            const dropdown = document.getElementById('notificationDropdown');
+
+            // Update badge
+            badge.textContent = data.count;
+            badge.style.display = data.count > 0 ? 'inline-block' : 'none';
+
+            // Clear dropdown
+            dropdown.innerHTML = '';
+
+            if (data.notifications.length > 0) {
+                data.notifications.forEach(n => {
+                    const item = document.createElement('div');
+                    item.classList.add('notification-item');
+                    item.innerHTML = `
+                        <p>${n.message}</p>
+                        <small>${new Date(n.created_at).toLocaleString()}</small>
+                    `;
+                    dropdown.appendChild(item);
+                });
+            } else {
+                dropdown.innerHTML = '<p class="empty">No    new notifications</p>';
+            }
         });
 }
+
+setInterval(loadNotifications, 10000);
+window.onload = loadNotifications;
+
+
 
     </script>
 </body>
