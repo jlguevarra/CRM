@@ -416,16 +416,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_task'])) {
             document.querySelector('.sidebar').classList.toggle('active');
         });
 
-        function loadNotifications() {
+    // Toggle notification dropdown
+const bell = document.getElementById('notificationBell');
+const dropdown = document.getElementById('notificationDropdown');
+
+bell.addEventListener('click', () => {
+    dropdown.classList.toggle('active');
+
+    // kapag binuksan, mark as read
+    if (dropdown.classList.contains('active')) {
+        fetch('mark_read.php')
+            .then(() => {
+                document.getElementById('notificationCount').style.display = 'none';
+            });
+    }
+});
+
+// Load notifications list
+function loadNotifications() {
     fetch('notifications.php')
         .then(res => res.json())
         .then(data => {
-            const count = data.count;
             const badge = document.getElementById('notificationCount');
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'inline-block' : 'none';
+            const dropdown = document.getElementById('notificationDropdown');
+
+            // Update badge
+            const unread = data.filter(n => n.is_read == 0).length;
+            badge.textContent = unread;
+            badge.style.display = unread > 0 ? 'inline-block' : 'none';
+
+            // Populate dropdown
+            dropdown.innerHTML = "";
+            if (data.length === 0) {
+                dropdown.innerHTML = "<div class='no-notif'>No notifications</div>";
+            } else {
+                data.forEach(n => {
+                    const item = document.createElement('div');
+                    item.className = "notif-item " + (n.is_read == 0 ? "unread" : "");
+                    item.innerHTML = `
+                        <strong>${n.task_title ?? 'Task'}</strong> - ${n.message} 
+                        <br><small>${n.created_at}</small>
+                    `;
+                    dropdown.appendChild(item);
+                });
+            }
         });
 }
+
+// auto-refresh notifications every 10s
+setInterval(loadNotifications, 10000);
+window.onload = loadNotifications;
+
 
 
 

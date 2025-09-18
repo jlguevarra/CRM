@@ -493,5 +493,43 @@
                 width: 100%;
                 justify-content: space-between;
             }
+            .notification {
+    position: relative;
+    cursor: pointer;
+}
+
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 30px;
+    width: 250px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    z-index: 999;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.notification-dropdown.active {
+    display: block;
+}
+
+.notif-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+}
+.notif-item.unread {
+    background: #f1f7ff;
+}
+.no-notif {
+    padding: 10px;
+    text-align: center;
+    color: #888;
+}
+
         }
    
