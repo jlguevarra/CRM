@@ -4,7 +4,6 @@ session_start();
 
 $userId = $_SESSION['user_id'];
 
-// Fetch unread count
 $sql = "
     SELECT n.id, n.message, n.is_read, n.created_at,
            t.title AS task_title, t.status AS task_status
@@ -20,8 +19,17 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 $notifications = [];
+$unread_count = 0;
+
 while ($row = $result->fetch_assoc()) {
     $notifications[] = $row;
+    if ($row['is_read'] == 0) {
+        $unread_count++;
+    }
 }
 
-echo json_encode($notifications);
+echo json_encode([
+    'count' => $unread_count,
+    'notifications' => $notifications
+]);
+

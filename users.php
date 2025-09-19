@@ -1,11 +1,22 @@
 <?php
 session_start();
 include 'config.php';
+include 'functions.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
 }
+
+$user_id = $_SESSION['user_id'];
+$user = getUserDetails($user_id);
+
+if ($user['role'] !== 'admin') {
+    header("Location: dashboard.php");
+    exit();
+}
+
+
 
 // Fetch current user's name and role
 $user_id = $_SESSION['user_id'];
@@ -334,12 +345,12 @@ if (isset($_GET['edit'])) {
         <h2>CRM</h2>
         <a href="dashboard.php"><i class="fas fa-chart-line"></i> <span>Dashboard</span></a>
         <a href="customers.php"><i class="fas fa-users"></i> <span>Customers</span></a>
-        <?php if ($role === 'admin'): ?>
-            <a href="users.php" class="active"><i class="fas fa-user-cog"></i> <span>Users</span></a>
+       <?php if ($role === 'admin') : ?>
+            <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
             <a href="reports.php"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
+            <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <?php endif; ?>
         <a href="task.php"><i class="fas fa-tasks"></i> <span>Tasks</span></a>
-        <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </div>
     

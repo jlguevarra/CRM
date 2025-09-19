@@ -3,35 +3,25 @@ session_start();
 include 'config.php';
 include 'functions.php';
 
-
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
 }
 
-
-// Fetch user role from database
+// Fetch user role and name
 $user_id = $_SESSION['user_id'];
-$sql = "SELECT role, name FROM users WHERE id='$user_id' LIMIT 1";
-$result = $conn->query($sql);
+$user = getUserDetails($user_id);
+$role = $user['role'];
+$user_name = $user['name'];
 
-if ($result->num_rows > 0) {
-    $user = $result->fetch_assoc();
-    $role = $user['role'];
-    $user_name = $user['name'];
-} else {
-    // User not found in database, logout
-    session_destroy();
-    header("Location: index.php");
-    exit();
-}
+// Get tasks based on role
+$tasks = getTasks(); // Already filters by role inside the function
 
-// Get tasks from database
-$tasks = getTasks();
-
-// Process form submissions
+// Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // ✅ Create Task
     if (isset($_POST['create_task'])) {
         $task_data = [
             'title' => $_POST['title'],
@@ -40,18 +30,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'priority' => $_POST['priority'],
             'status' => $_POST['status'],
             'assigned_to' => $_POST['assigned_to'],
-            'created_by' => $_SESSION['user_id']
+            'created_by' => $user_id
         ];
-        
+
         if (createTask($task_data)) {
+            $task_id = $conn->insert_id;
+
+            // 🔔 Insert notification for assigned user
+            $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, related_type, related_id, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NOW())");
+            $title = "New Task Assigned";
+            $message = "You've been assigned a new task: " . $task_data['title'];
+            $type = "task";
+            $related_type = "task";
+            $stmt->bind_param("issssi", $task_data['assigned_to'], $title, $message, $type, $related_type, $task_id);
+            $stmt->execute();
+
             $success_message = "Task created successfully!";
-            // Refresh tasks
-            $tasks = getTasks();
+            $tasks = getTasks(); // Refresh
         } else {
             $error_message = "Failed to create task. Please try again.";
         }
     }
-    
+
+    // ✅ Update Task
     if (isset($_POST['update_task'])) {
         $task_data = [
             'task_id' => $_POST['task_id'],
@@ -62,57 +63,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'status' => $_POST['status'],
             'assigned_to' => $_POST['assigned_to']
         ];
-        
+
         if (updateTask($task_data)) {
             $success_message = "Task updated successfully!";
-            // Refresh tasks
             $tasks = getTasks();
         } else {
             $error_message = "Failed to update task. Please try again.";
         }
     }
-    
+
+    // ✅ Delete Task
     if (isset($_POST['delete_task'])) {
         $task_id = $_POST['task_id'];
-        
+
         if (deleteTask($task_id)) {
             $success_message = "Task deleted successfully!";
-            // Refresh tasks
             $tasks = getTasks();
         } else {
             $error_message = "Failed to delete task. Please try again.";
         }
     }
-    
+
+    // ✅ Update Task Status
     if (isset($_POST['update_task_status'])) {
         $task_id = $_POST['task_id'];
         $status = $_POST['status'];
-        
+
         if (updateTaskStatus($task_id, $status)) {
-            // Refresh tasks
             $tasks = getTasks();
         }
     }
 }
 
-// Get users for assignment dropdown
+// ✅ Get users for assignment dropdown
 $users = [];
 $user_result = $conn->query("SELECT id, name FROM users");
 if ($user_result->num_rows > 0) {
-    while($row = $user_result->fetch_assoc()) {
+    while ($row = $user_result->fetch_assoc()) {
         $users[] = $row;
     }
 }
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_task'])) {
-    // Your task creation logic here
-    // e.g., INSERT INTO tasks ...
-
-    // Redirect to prevent resubmission
-    header('Location: task.php');
-    exit;
-}
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -133,9 +123,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_task'])) {
         <?php if ($role === 'admin') : ?>
             <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
             <a href="reports.php"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
+            <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <?php endif; ?>
         <a href="tasks.php" class="active"><i class="fas fa-tasks"></i> <span>Tasks</span></a>
-        <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
+       
         <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </div>
 

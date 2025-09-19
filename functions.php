@@ -5,36 +5,35 @@ include 'config.php';
 // Task functions
 function getTasks($filters = []) {
     global $conn;
-    
+
+    $user_id = $_SESSION['user_id'];
+    $user = getUserDetails($user_id);
+    $role = $user['role'];
+
     $sql = "SELECT t.*, u.name as assigned_name, creator.name as created_by_name 
             FROM tasks t 
             JOIN users u ON t.assigned_to = u.id 
             JOIN users creator ON t.created_by = creator.id 
             WHERE 1=1";
-    
-    if (!empty($filters['status']) && $filters['status'] != 'all') {
-        $sql .= " AND t.status = '" . $conn->real_escape_string($filters['status']) . "'";
+
+    // 🔐 Restrict for managers
+    if ($role === 'user') {
+        $sql .= " AND t.assigned_to = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $user_id);
+    } else {
+        // Admin sees all
+        $stmt = $conn->prepare($sql);
     }
-    
-    if (!empty($filters['priority']) && $filters['priority'] != 'all') {
-        $sql .= " AND t.priority = '" . $conn->real_escape_string($filters['priority']) . "'";
-    }
-    
-    if (!empty($filters['due_date'])) {
-        $sql .= " AND t.due_date = '" . $conn->real_escape_string($filters['due_date']) . "'";
-    }
-    
-    $sql .= " ORDER BY t.due_date ASC";
-    
-    $result = $conn->query($sql);
+
+    $stmt->execute();
+    $result = $stmt->get_result();
     $tasks = [];
-    
-    if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            $tasks[] = $row;
-        }
+
+    while ($row = $result->fetch_assoc()) {
+        $tasks[] = $row;
     }
-    
+
     return $tasks;
 }
 

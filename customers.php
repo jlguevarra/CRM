@@ -278,12 +278,12 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
         <h2>CRM</h2>
         <a href="dashboard.php"><i class="fas fa-chart-line"></i> <span>Dashboard</span></a>
         <a href="customers.php" class="active"><i class="fas fa-users"></i> <span>Customers</span></a>
-        <?php if ($role === 'admin'): ?>
+        <?php if ($role === 'admin') : ?>
             <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
             <a href="reports.php"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
+            <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <?php endif; ?>
         <a href="task.php"><i class="fas fa-tasks"></i> <span>Tasks</span></a>
-        <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </div>
 

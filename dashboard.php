@@ -3,6 +3,8 @@
 ob_start();
 session_start();
 
+//echo $_SESSION['user_id']; // should output 3
+
 // Include configuration and functions
 include 'config.php';
 include 'functions.php';
@@ -92,12 +94,12 @@ $recent_activities = getActivityLog($user_id, 5);
         <h2>CRM</h2>
         <a href="dashboard.php" class="active"><i class="fas fa-chart-line"></i> <span>Dashboard</span></a>
         <a href="customers.php"><i class="fas fa-users"></i> <span>Customers</span></a>
-        <?php if ($role === 'admin') : ?>
+       <?php if ($role === 'admin') : ?>
             <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
             <a href="reports.php"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
+            <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <?php endif; ?>
         <a href="task.php"><i class="fas fa-tasks"></i> <span>Tasks</span></a>
-        <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </div>
 
@@ -147,10 +149,10 @@ $recent_activities = getActivityLog($user_id, 5);
                     <h2><?php echo $open_tasks_count; ?></h2>
                     <p>Open Tasks</p>
                 </div>
-                <div class="stat-box">
+                <!-- <div class="stat-box">
                     <h2><div class="value"><?= $stats['conversion_rate'] ?>%</div></h2>
                     <p>Conversion Rate</p>
-                </div>
+                </div> -->
 
             </div>
         </div>
@@ -236,7 +238,7 @@ $recent_activities = getActivityLog($user_id, 5);
                 </ul>
             </div>
             
-            <!-- Quick Actions -->
+            <!-- Quick Actions
             <div class="card">
                 <h3>Quick Actions</h3>
                 <div class="quick-actions">
@@ -259,134 +261,151 @@ $recent_activities = getActivityLog($user_id, 5);
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
+
 
     <script>
-        // Toggle sidebar on mobile
-        document.getElementById('toggleSidebar').addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('active');
-        });
-        
-        // Customer acquisition chart
-        const acquisitionCtx = document.getElementById('acquisitionChart').getContext('2d');
-        const acquisitionChart = new Chart(acquisitionCtx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
-                datasets: [{
-                    label: 'New Customers',
-                    data: [12, 19, 15, 17, 22, 25, 28, 24, 30, 35],
-                    backgroundColor: 'rgba(74, 108, 247, 0.1)',
-                    borderColor: '#4a6cf7',
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: true
-                }]
+    // Toggle sidebar on mobile
+    document.getElementById('toggleSidebar').addEventListener('click', function () {
+        document.querySelector('.sidebar').classList.toggle('active');
+    });
+
+    // Customer acquisition chart
+    const acquisitionCtx = document.getElementById('acquisitionChart').getContext('2d');
+    const acquisitionChart = new Chart(acquisitionCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+            datasets: [{
+                label: 'New Customers',
+                data: [12, 19, 15, 17, 22, 25, 28, 24, 30, 35],
+                backgroundColor: 'rgba(74, 108, 247, 0.1)',
+                borderColor: '#4a6cf7',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        drawBorder: false
                     }
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            drawBorder: false
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        }
+                x: {
+                    grid: {
+                        display: false
                     }
                 }
             }
-        });
-        
-        // Task checkboxes
-        document.querySelectorAll('.task-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    this.parentElement.style.opacity = '0.6';
-                    this.parentElement.style.textDecoration = 'line-through';
-                } else {
-                    this.parentElement.style.opacity = '1';
-                    this.parentElement.style.textDecoration = 'none';
-                }
-            });
-        });
-        
-        // Function to update task status
-        function updateTaskStatus(taskId, status) {
-            // Create a form to submit the status update
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'update_task_status.php';
-            
-            // Add task ID
-            const taskIdInput = document.createElement('input');
-            taskIdInput.type = 'hidden';
-            taskIdInput.name = 'task_id';
-            taskIdInput.value = taskId;
-            form.appendChild(taskIdInput);
-            
-            // Add status
-            const statusInput = document.createElement('input');
-            statusInput.type = 'hidden';
-            statusInput.name = 'status';
-            statusInput.value = status;
-            form.appendChild(statusInput);
-            
-            // Add CSRF token if needed (you should implement this)
-            // const csrfInput = document.createElement('input');
-            // csrfInput.type = 'hidden';
-            // csrfInput.name = 'csrf_token';
-            // csrfInput.value = '<?php echo $_SESSION["csrf_token"]; ?>';
-            // form.appendChild(csrfInput);
-            
-            // Submit the form
-            document.body.appendChild(form);
-            form.submit();
         }
-function loadNotifications() {
-    fetch('notifications.php')
-        .then(res => res.json())
-        .then(data => {
-            const badge = document.getElementById('notificationCount');
-            const dropdown = document.getElementById('notificationDropdown');
+    });
 
-            // Update badge
-            badge.textContent = data.count;
-            badge.style.display = data.count > 0 ? 'inline-block' : 'none';
-
-            // Clear dropdown
-            dropdown.innerHTML = '';
-
-            if (data.notifications.length > 0) {
-                data.notifications.forEach(n => {
-                    const item = document.createElement('div');
-                    item.classList.add('notification-item');
-                    item.innerHTML = `
-                        <p>${n.message}</p>
-                        <small>${new Date(n.created_at).toLocaleString()}</small>
-                    `;
-                    dropdown.appendChild(item);
-                });
+    // Task checkboxes
+    document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            if (this.checked) {
+                this.parentElement.style.opacity = '0.6';
+                this.parentElement.style.textDecoration = 'line-through';
             } else {
-                dropdown.innerHTML = '<p class="empty">No    new notifications</p>';
+                this.parentElement.style.opacity = '1';
+                this.parentElement.style.textDecoration = 'none';
             }
         });
+    });
+
+    // Function to update task status
+    function updateTaskStatus(taskId, status) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'update_task_status.php';
+
+        const taskIdInput = document.createElement('input');
+        taskIdInput.type = 'hidden';
+        taskIdInput.name = 'task_id';
+        taskIdInput.value = taskId;
+        form.appendChild(taskIdInput);
+
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = status;
+        form.appendChild(statusInput);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Load notifications and handle interactions
+    function loadNotifications() {
+        fetch('notifications.php')
+            .then(res => res.json())
+            .then(data => {
+                const badge = document.getElementById('notificationCount');
+                const dropdown = document.getElementById('notificationDropdown');
+
+                badge.textContent = data.count;
+                badge.style.display = data.count > 0 ? 'inline-block' : 'none';
+
+               dropdown.innerHTML = '';
+
+if (data.notifications.length > 0) {
+    data.notifications.forEach(n => {
+        const item = document.createElement('div');
+        item.classList.add('notification-item');
+        item.innerHTML = `
+            <p>${n.message}</p>
+            <small>${new Date(n.created_at).toLocaleString()}</small>
+        `;
+        item.onclick = () => {
+            markNotificationAsRead(n.id);
+            item.classList.add('read');
+            showToast(n.message);
+        };
+        dropdown.appendChild(item);
+    });
+} else {
+    dropdown.innerHTML = '<p class="empty">No new notifications</p>';
 }
 
-setInterval(loadNotifications, 10000);
-window.onload = loadNotifications;
+
+            });
+    }
+
+    // Mark notification as read
+    function markNotificationAsRead(id) {
+        fetch('mark_notification_read.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `id=${id}`
+        }).then(() => loadNotifications());
+    }
+
+    // Show toast popup
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-popup';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    setInterval(loadNotifications, 10000);
+    window.onload = loadNotifications;
+</script>
 
 
 
-    </script>
+
+
 </body>
 </html>

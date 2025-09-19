@@ -2,25 +2,35 @@
 session_start();
 include 'config.php';
 
+$_SESSION['user_id'] = $user['id'];
+
 if (isset($_POST['login'])) {
     $email    = $_POST['email'];
     $password = $_POST['password'];
 
-    $sql = "SELECT * FROM users WHERE email='$email'";
-    $result = $conn->query($sql);
+    // Use prepared statement to prevent SQL injection
+    $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
         $user = $result->fetch_assoc();
+
         if (password_verify($password, $user['password'])) {
+            // ✅ Set session variables
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['name']    = $user['name'];
+            $_SESSION['role']    = $user['role'];
+
+            // Redirect to dashboard
             header("Location: dashboard.php");
             exit();
         } else {
             $error = "Invalid password.";
         }
     } else {
-        $error = "No user found.";
+        $error = "No user found with that email.";
     }
 }
 ?>
