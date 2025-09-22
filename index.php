@@ -2,7 +2,7 @@
 session_start();
 include 'config.php';
 
-$_SESSION['user_id'] = $user['id'];
+
 
 if (isset($_POST['login'])) {
     $email    = $_POST['email'];
