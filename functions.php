@@ -2,6 +2,359 @@
 // Database connection (already in your config.php)
 include 'config.php';
 
+// User Management Functions
+function getAllUsers() {
+    global $conn;
+    
+    $sql = "SELECT id, name, email, role, phone, position FROM users ORDER BY name ASC";
+    $result = $conn->query($sql);
+    
+    $users = [];
+    if ($result && $result->num_rows > 0) {
+        while($row = $result->fetch_assoc()) {
+            $users[] = $row;
+        }
+    }
+    
+    return $users;
+}
+
+function getUserDetails($user_id) {
+    global $conn;
+    
+    $sql = "SELECT * FROM users WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        
+        // Split full name into first and last name for the form
+        $name_parts = explode(' ', $user['name'], 2);
+        $user['first_name'] = $name_parts[0] ?? '';
+        $user['last_name'] = $name_parts[1] ?? '';
+        
+        return $user;
+    }
+    
+    return null;
+}
+
+function updateUserProfile($user_id, $data) {
+    global $conn;
+    
+    // Combine first and last name
+    $full_name = trim($data['first_name'] . ' ' . ($data['last_name'] ?? ''));
+    
+    $sql = "UPDATE users SET name = ?, email = ?, phone = ?, position = ?, bio = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    
+    $stmt->bind_param("sssssi", 
+        $full_name,
+        $data['email'],
+        $data['phone'],
+        $data['position'],
+        $data['bio'],
+        $user_id
+    );
+    
+    return $stmt->execute();
+}
+
+function updatePassword($user_id, $current_password, $new_password) {
+    global $conn;
+    
+    // Verify current password
+    $sql = "SELECT password FROM users WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        
+        if (password_verify($current_password, $user['password'])) {
+            // Hash new password
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            
+            // Update password
+            $sql = "UPDATE users SET password = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("si", $hashed_password, $user_id);
+            
+            return $stmt->execute();
+        }
+    }
+    
+    return false;
+}
+
+function createUser($data) {
+    global $conn;
+    
+    // Check if email already exists
+    $check_sql = "SELECT id FROM users WHERE email = ?";
+    $check_stmt = $conn->prepare($check_sql);
+    $check_stmt->bind_param("s", $data['email']);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        return false; // Email already exists
+    }
+    
+    $sql = "INSERT INTO users (name, email, password, role, phone, position, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, NOW())";
+    
+    // Hash password
+    $hashed_password = password_hash($data['password'], PASSWORD_DEFAULT);
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssssss", 
+        $data['name'],
+        $data['email'],
+        $hashed_password,
+        $data['role'],
+        $data['phone'],
+        $data['position']
+    );
+    
+    return $stmt->execute();
+}
+
+function updateUser($user_id, $data) {
+    global $conn;
+    
+    $sql = "UPDATE users SET 
+            name = ?, 
+            email = ?, 
+            role = ?, 
+            phone = ?, 
+            position = ? 
+            WHERE id = ?";
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssssi", 
+        $data['name'],
+        $data['email'],
+        $data['role'],
+        $data['phone'],
+        $data['position'],
+        $user_id
+    );
+    
+    return $stmt->execute();
+}
+
+function deleteUser($user_id) {
+    global $conn;
+    
+    // Prevent deleting the last admin
+    $check_sql = "SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'";
+    $check_result = $conn->query($check_sql);
+    $admin_count = $check_result->fetch_assoc()['admin_count'];
+    
+    $user_sql = "SELECT role FROM users WHERE id = ?";
+    $user_stmt = $conn->prepare($user_sql);
+    $user_stmt->bind_param("i", $user_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user_role = $user_result->fetch_assoc()['role'];
+    
+    if ($user_role === 'admin' && $admin_count <= 1) {
+        return false; // Cannot delete the last admin
+    }
+    
+    $sql = "DELETE FROM users WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    
+    return $stmt->execute();
+}
+
+// Settings Functions
+function getUserSettings($user_id) {
+    global $conn;
+    
+    $sql = "SELECT * FROM user_settings WHERE user_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    
+    $result = $stmt->get_result();
+    $settings = $result->fetch_assoc();
+    
+    // Return default settings if none exist
+    if (!$settings) {
+        return [
+            'email_notifications' => 1,
+            'push_notifications' => 1,
+            'task_reminders' => 1,
+            'weekly_reports' => 0,
+            'theme' => 'light',
+            'language' => 'en',
+            'timezone' => 'UTC',
+            'date_format' => 'mm/dd/yyyy',
+            'time_format' => '12',
+            'items_per_page' => 25
+        ];
+    }
+    
+    return $settings;
+}
+
+function updateUserPreferences($user_id, $data) {
+    global $conn;
+    
+    // Check if settings already exist
+    $check_sql = "SELECT id FROM user_settings WHERE user_id = ?";
+    $check_stmt = $conn->prepare($check_sql);
+    $check_stmt->bind_param("i", $user_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    // Set default values for missing fields
+    $email_notifications = isset($data['email_notifications']) ? 1 : 0;
+    $push_notifications = isset($data['push_notifications']) ? 1 : 0;
+    $task_reminders = isset($data['task_reminders']) ? 1 : 0;
+    $weekly_reports = isset($data['weekly_reports']) ? 1 : 0;
+    $theme = $data['theme'] ?? 'light';
+    $language = $data['language'] ?? 'en';
+    $timezone = $data['timezone'] ?? 'UTC';
+    $date_format = $data['date_format'] ?? 'mm/dd/yyyy';
+    $time_format = $data['time_format'] ?? '12';
+    $items_per_page = $data['items_per_page'] ?? 25;
+    
+    if ($check_result->num_rows > 0) {
+        // Update existing settings
+        $sql = "UPDATE user_settings SET 
+                email_notifications = ?, 
+                push_notifications = ?, 
+                task_reminders = ?, 
+                weekly_reports = ?, 
+                theme = ?, 
+                language = ?, 
+                timezone = ?, 
+                date_format = ?,
+                time_format = ?,
+                items_per_page = ?,
+                updated_at = NOW()
+                WHERE user_id = ?";
+        
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("iiiisssssii", 
+            $email_notifications,
+            $push_notifications,
+            $task_reminders,
+            $weekly_reports,
+            $theme,
+            $language,
+            $timezone,
+            $date_format,
+            $time_format,
+            $items_per_page,
+            $user_id
+        );
+    } else {
+        // Insert new settings
+        $sql = "INSERT INTO user_settings 
+                (user_id, email_notifications, push_notifications, task_reminders, weekly_reports, 
+                 theme, language, timezone, date_format, time_format, items_per_page) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("iiiissssssi", 
+            $user_id,
+            $email_notifications,
+            $push_notifications,
+            $task_reminders,
+            $weekly_reports,
+            $theme,
+            $language,
+            $timezone,
+            $date_format,
+            $time_format,
+            $items_per_page
+        );
+    }
+    
+    return $stmt->execute();
+}
+
+function getSystemSettings() {
+    global $conn;
+    
+    $sql = "SELECT * FROM system_settings ORDER BY id DESC LIMIT 1";
+    $result = $conn->query($sql);
+    
+    if ($result->num_rows > 0) {
+        return $result->fetch_assoc();
+    }
+    
+    // Return default settings if none exist
+    return [
+        'company_name' => 'Your Company Inc.',
+        'auto_backup' => 1,
+        'backup_frequency' => 'weekly',
+        'backup_location' => 'local',
+        'email_notifications' => 1,
+        'timezone' => 'UTC',
+        'date_format' => 'mm/dd/yyyy',
+        'time_format' => '12',
+        'items_per_page' => 25
+    ];
+}
+
+function updateSystemSettings($data) {
+    global $conn;
+    
+    // Check if settings already exist
+    $check_sql = "SELECT id FROM system_settings ORDER BY id DESC LIMIT 1";
+    $check_result = $conn->query($check_sql);
+    
+    if ($check_result->num_rows > 0) {
+        // Update existing settings
+        $sql = "UPDATE system_settings SET 
+                company_name = ?, 
+                auto_backup = ?, 
+                backup_frequency = ?, 
+                backup_location = ?, 
+                email_notifications = ?, 
+                timezone = ?, 
+                date_format = ?, 
+                time_format = ?, 
+                items_per_page = ?,
+                updated_at = NOW()
+                ORDER BY id DESC LIMIT 1";
+    } else {
+        // Insert new settings
+        $sql = "INSERT INTO system_settings 
+                (company_name, auto_backup, backup_frequency, backup_location, email_notifications, 
+                 timezone, date_format, time_format, items_per_page) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    }
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sississsi", 
+        $data['company_name'],
+        $data['auto_backup'],
+        $data['backup_frequency'],
+        $data['backup_location'],
+        $data['email_notifications'],
+        $data['timezone'],
+        $data['date_format'],
+        $data['time_format'],
+        $data['items_per_page']
+    );
+    
+    return $stmt->execute();
+}
+
 // Task functions
 function getTasks($filters = []) {
     global $conn;
@@ -52,53 +405,6 @@ function createTask($data) {
         $data['status'], 
         $data['assigned_to'], 
         $data['created_by']
-    );
-    
-    return $stmt->execute();
-}
-
-// Settings functions
-function getUserSettings($user_id) {
-    global $conn;
-    
-    $sql = "SELECT * FROM user_settings WHERE user_id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    
-    $result = $stmt->get_result();
-    return $result->fetch_assoc();
-}
-
-function updateUserSettings($user_id, $data) {
-    global $conn;
-    
-    $sql = "UPDATE user_settings SET 
-            email_notifications = ?, 
-            push_notifications = ?, 
-            task_reminders = ?, 
-            weekly_reports = ?, 
-            theme = ?, 
-            language = ?, 
-            timezone = ?, 
-            date_format = ?, 
-            time_format = ?, 
-            items_per_page = ? 
-            WHERE user_id = ?";
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iiisssssssi", 
-        $data['email_notifications'], 
-        $data['push_notifications'], 
-        $data['task_reminders'], 
-        $data['weekly_reports'], 
-        $data['theme'], 
-        $data['language'], 
-        $data['timezone'], 
-        $data['date_format'], 
-        $data['time_format'], 
-        $data['items_per_page'], 
-        $user_id
     );
     
     return $stmt->execute();
@@ -206,108 +512,161 @@ function logActivity($user_id, $activity_type, $description) {
     return $stmt->execute();
 }
 
-function getActivityLog($user_id = null, $limit = 50) {
+function getActivityLog($user_id = null, $limit = 5) {
     global $conn;
     
-    $sql = "SELECT al.*, u.name as user_name 
-            FROM activity_log al 
-            JOIN users u ON al.user_id = u.id";
-    
-    if ($user_id) {
-        $sql .= " WHERE al.user_id = ?";
-    }
-    
-    $sql .= " ORDER BY al.created_at DESC LIMIT ?";
-    
-    $stmt = $conn->prepare($sql);
-    
-    if ($user_id) {
-        $stmt->bind_param("ii", $user_id, $limit);
-    } else {
-        $stmt->bind_param("i", $limit);
-    }
-    
-    $stmt->execute();
-    
-    $result = $stmt->get_result();
-    $activities = [];
-    
-    if ($result->num_rows > 0) {
+    try {
+        $sql = "SELECT al.*, u.name as user_name 
+                FROM activity_log al 
+                JOIN users u ON al.user_id = u.id";
+        
+        $params = [];
+        $types = "";
+        
+        if ($user_id) {
+            $sql .= " WHERE al.user_id = ?";
+            $params[] = $user_id;
+            $types .= "i";
+        }
+        
+        $sql .= " ORDER BY al.created_at DESC LIMIT ?";
+        $params[] = $limit;
+        $types .= "i";
+        
+        $stmt = $conn->prepare($sql);
+        
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $activities = [];
         while($row = $result->fetch_assoc()) {
+            // Format the description to be more user-friendly
+            $row['formatted_description'] = formatActivityDescription($row);
             $activities[] = $row;
         }
+        
+        return $activities;
+        
+    } catch (Exception $e) {
+        error_log("Error fetching activity log: " . $e->getMessage());
+        return [];
     }
+}
+
+// Helper function to format activity descriptions
+function formatActivityDescription($activity) {
+    $description = $activity['description'];
+    $user_name = $activity['user_name'];
     
-    return $activities;
+    // Add user name to the description for better context
+    return $user_name . " - " . $description;
 }
 
 function generateReportData($filters) {
     global $conn;
 
     $report_data = [];
-    $start_date = $filters['start_date'];
-    $end_date = $filters['end_date'];
+    
+    // Set default dates
+    $date_range = $filters['date_range'] ?? '30';
+    $end_date = $filters['end_date'] ?? date('Y-m-d');
+    
+    if ($date_range === 'custom' && !empty($filters['start_date']) && !empty($filters['end_date'])) {
+        $start_date = $filters['start_date'];
+        $end_date = $filters['end_date'];
+    } else {
+        $days = intval($date_range);
+        $start_date = date('Y-m-d', strtotime("-$days days", strtotime($end_date)));
+    }
+
+    // Add time to dates for proper range comparison
+    $start_datetime = $start_date . ' 00:00:00';
+    $end_datetime = $end_date . ' 23:59:59';
 
     switch ($filters['report_type']) {
         case 'sales':
+            // Sales performance report - Customer acquisition over time
             $sql = "SELECT 
                         DATE(created_at) as date,
-                        COUNT(*) as total_customers,
-                        SUM(CASE WHEN DATE(created_at) BETWEEN ? AND ? THEN 1 ELSE 0 END) as new_customers
+                        COUNT(*) as new_customers
                     FROM customers 
                     WHERE created_at BETWEEN ? AND ?
-                    GROUP BY DATE(created_at) 
-                    ORDER BY date DESC";
+                    GROUP BY DATE(created_at)
+                    ORDER BY date ASC";
+            
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssss", $start_date, $end_date, $start_date, $end_date);
+            $stmt->bind_param("ss", $start_datetime, $end_datetime);
+            break;
+
+        case 'customers':
+            // Customer analytics - Total customers growth
+            $sql = "SELECT 
+                        DATE(created_at) as date,
+                        COUNT(*) as new_customers,
+                        (SELECT COUNT(*) FROM customers c2 WHERE DATE(c2.created_at) <= DATE(customers.created_at)) as total_customers
+                    FROM customers 
+                    WHERE created_at BETWEEN ? AND ?
+                    GROUP BY DATE(created_at)
+                    ORDER BY date ASC";
+            
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ss", $start_datetime, $end_datetime);
             break;
 
         case 'tasks':
+            // Task completion report
             $sql = "SELECT 
                         DATE(created_at) as date,
                         COUNT(*) as tasks_created,
-                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as tasks_completed
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as tasks_completed,
+                        CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2)
+                            ELSE 0 
+                        END as completion_rate
                     FROM tasks 
                     WHERE created_at BETWEEN ? AND ?
-                    GROUP BY DATE(created_at) 
-                    ORDER BY date DESC";
+                    GROUP BY DATE(created_at)
+                    ORDER BY date ASC";
+            
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ss", $start_date, $end_date);
+            $stmt->bind_param("ss", $start_datetime, $end_datetime);
             break;
 
         default:
+            // Default sales report
             $sql = "SELECT 
                         DATE(created_at) as date,
-                        COUNT(*) as total_customers
+                        COUNT(*) as new_customers
                     FROM customers 
                     WHERE created_at BETWEEN ? AND ?
-                    GROUP BY DATE(created_at) 
-                    ORDER BY date DESC";
+                    GROUP BY DATE(created_at)
+                    ORDER BY date ASC";
+            
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ss", $start_date, $end_date);
+            $stmt->bind_param("ss", $start_datetime, $end_datetime);
             break;
     }
 
-    $stmt->execute();
-    $result = $stmt->get_result();
+    try {
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-    if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
-            if ($filters['report_type'] === 'sales') {
-                $row['conversion_rate'] = $row['total_customers'] > 0 ?
-                    round(($row['new_customers'] / $row['total_customers']) * 100, 2) : 0;
-            }
             $report_data[] = $row;
         }
+    } catch (Exception $e) {
+        error_log("Report generation error: " . $e->getMessage());
     }
 
     return $report_data;
 }
 
-/**
- * Calculate statistics from report data
- */
-function calculateStats($report_data) {
+function calculateStats($report_data, $report_type = 'sales') {
     $stats = [
         'total_customers' => 0,
         'new_customers' => 0,
@@ -325,216 +684,31 @@ function calculateStats($report_data) {
         $stats['tasks_completed'] += $data['tasks_completed'] ?? 0;
     }
     
-    // Calculate average conversion rate
-    if ($stats['total_customers'] > 0) {
-        $stats['conversion_rate'] = round(($stats['new_customers'] / $stats['total_customers']) * 100, 2);
-    }
-    
-    // Calculate task completion percentage if we have task data
-    $total_tasks = $stats['total_customers']; // This would need adjustment for actual task data
-    if ($total_tasks > 0) {
-        $stats['tasks_completed'] = round(($stats['tasks_completed'] / $total_tasks) * 100, 2);
+    // Calculate based on report type
+    switch ($report_type) {
+        case 'sales':
+            if ($stats['total_customers'] > 0) {
+                $stats['conversion_rate'] = round(($stats['new_customers'] / $stats['total_customers']) * 100, 2);
+            }
+            break;
+            
+        case 'tasks':
+            $total_tasks = array_sum(array_column($report_data, 'tasks_created'));
+            if ($total_tasks > 0) {
+                $stats['tasks_completed'] = round(($stats['tasks_completed'] / $total_tasks) * 100, 2);
+            }
+            $stats['conversion_rate'] = 0; // Not applicable for tasks
+            break;
+            
+        default:
+            if ($stats['total_customers'] > 0) {
+                $stats['conversion_rate'] = round(($stats['new_customers'] / $stats['total_customers']) * 100, 2);
+            }
+            break;
     }
     
     return $stats;
 }
-
-/**
- * Save report configuration
- */
-function saveReport($data) {
-    global $conn;
-    
-    $sql = "INSERT INTO reports (report_type, title, description, date_range, start_date, end_date, created_by, filters) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    
-    $filters_json = json_encode($data['filters']);
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssssssis", 
-        $data['report_type'], 
-        $data['title'], 
-        $data['description'], 
-        $data['date_range'], 
-        $data['start_date'], 
-        $data['end_date'], 
-        $data['created_by'], 
-        $filters_json
-    );
-    
-    if ($stmt->execute()) {
-        return $conn->insert_id;
-    }
-    
-    return false;
-}
-
-// Add these functions to your existing functions.php file
-
-/**
- * Get user details
- */
-function getUserDetails($user_id) {
-    global $conn;
-    
-    $sql = "SELECT * FROM users WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    
-    $result = $stmt->get_result();
-    return $result->fetch_assoc();
-}
-
-/**
- * Update user profile
- */
-function updateUserProfile($user_id, $data) {
-    global $conn;
-    
-    $sql = "UPDATE users SET name = ?, email = ?, phone = ?, position = ?, bio = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    
-    // Combine first and last name
-    $full_name = $data['first_name'] . ' ' . $data['last_name'];
-    
-    $stmt->bind_param("sssssi", 
-        $full_name,
-        $data['email'],
-        $data['phone'],
-        $data['position'],
-        $data['bio'],
-        $user_id
-    );
-    
-    return $stmt->execute();
-}
-
-/**
- * Update password
- */
-function updatePassword($user_id, $current_password, $new_password) {
-    global $conn;
-    
-    // Verify current password
-    $sql = "SELECT password FROM users WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
-    
-    if (password_verify($current_password, $user['password'])) {
-        // Hash new password
-        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-        
-        // Update password
-        $sql = "UPDATE users SET password = ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("si", $hashed_password, $user_id);
-        
-        return $stmt->execute();
-    }
-    
-    return false;
-}
-
-/**
- * Get all users (admin only)
- */
-function getAllUsers() {
-    global $conn;
-    
-    $sql = "SELECT id, name, email, role FROM users ORDER BY name";
-    $result = $conn->query($sql);
-    
-    $users = [];
-    if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            $users[] = $row;
-        }
-    }
-    
-    return $users;
-}
-
-/**
- * Get system settings
- */
-function getSystemSettings() {
-    global $conn;
-    
-    $sql = "SELECT * FROM system_settings ORDER BY id DESC LIMIT 1";
-    $result = $conn->query($sql);
-    
-    if ($result->num_rows > 0) {
-        return $result->fetch_assoc();
-    }
-    
-    // Return default settings if none exist
-    return [
-        'company_name' => 'Your Company Inc.',
-        'auto_backup' => 1,
-        'backup_frequency' => 'weekly',
-        'backup_location' => 'local',
-        'email_notifications' => 1,
-        'timezone' => 'UTC',
-        'date_format' => 'mm/dd/yyyy',
-        'time_format' => '12',
-        'items_per_page' => '25'
-    ];
-}
-
-/**
- * Update system settings
- */
-function updateSystemSettings($data) {
-    global $conn;
-    
-    // Check if settings already exist
-    $check_sql = "SELECT id FROM system_settings ORDER BY id DESC LIMIT 1";
-    $check_result = $conn->query($check_sql);
-    
-    if ($check_result->num_rows > 0) {
-        // Update existing settings
-        $sql = "UPDATE system_settings SET 
-                company_name = ?, 
-                auto_backup = ?, 
-                backup_frequency = ?, 
-                backup_location = ?, 
-                email_notifications = ?, 
-                timezone = ?, 
-                date_format = ?, 
-                time_format = ?, 
-                items_per_page = ? 
-                ORDER BY id DESC LIMIT 1";
-    } else {
-        // Insert new settings
-        $sql = "INSERT INTO system_settings 
-                (company_name, auto_backup, backup_frequency, backup_location, email_notifications, timezone, date_format, time_format, items_per_page) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    }
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sississss", 
-        $data['company_name'],
-        $data['auto_backup'],
-        $data['backup_frequency'],
-        $data['backup_location'],
-        $data['email_notifications'],
-        $data['timezone'],
-        $data['date_format'],
-        $data['time_format'],
-        $data['items_per_page']
-    );
-    
-    return $stmt->execute();
-}
-
-
-
-
 
 function updateTask($data) {
     global $conn;
@@ -613,8 +787,4 @@ function fetchUnreadNotifications($user_id) {
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
-
-
-
-
 ?>

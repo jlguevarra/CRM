@@ -167,18 +167,35 @@ $recent_activities = getActivityLog($user_id, 5);
                 </div>
             </div>
             
-            <!-- Recent Activity -->
+           <!-- Recent Activity -->
             <div class="card">
                 <h3>Recent Activity <a href="#" class="view-all">View All</a></h3>
                 <ul class="activity-feed">
-                    <?php if (!empty($recent_activities)) : ?>
+                    <?php 
+                    // Get recent activities with error handling
+                    $recent_activities = getActivityLog($user_id, 5);
+                    
+                    if (!empty($recent_activities)) : ?>
                         <?php foreach ($recent_activities as $activity) : ?>
                             <li class="activity-item">
                                 <div class="activity-icon">
-                                    <i class="fas fa-history"></i>
+                                    <?php
+                                    // Different icons based on activity type
+                                    $icon = 'fa-history'; // default
+                                    switch($activity['activity_type']) {
+                                        case 'login': $icon = 'fa-sign-in-alt'; break;
+                                        case 'task_create': $icon = 'fa-tasks'; break;
+                                        case 'task_complete': $icon = 'fa-check-circle'; break;
+                                        case 'customer_add': $icon = 'fa-user-plus'; break;
+                                        case 'customer_update': $icon = 'fa-user-edit'; break;
+                                        case 'report_generate': $icon = 'fa-chart-bar'; break;
+                                        case 'schedule': $icon = 'fa-calendar'; break;
+                                    }
+                                    ?>
+                                    <i class="fas <?php echo $icon; ?>"></i>
                                 </div>
                                 <div class="activity-content">
-                                    <p><?php echo htmlspecialchars($activity['description']); ?></p>
+                                    <p><?php echo htmlspecialchars($activity['formatted_description'] ?? $activity['description']); ?></p>
                                     <div class="activity-time">
                                         <?php echo date('M j, Y g:i A', strtotime($activity['created_at'])); ?>
                                     </div>
@@ -187,8 +204,14 @@ $recent_activities = getActivityLog($user_id, 5);
                         <?php endforeach; ?>
                     <?php else : ?>
                         <li class="activity-item">
+                            <div class="activity-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
                             <div class="activity-content">
-                                <p>No recent activity</p>
+                                <p>No recent activity found</p>
+                                <div class="activity-time">
+                                    Activities will appear here as you use the system
+                                </div>
                             </div>
                         </li>
                     <?php endif; ?>
@@ -196,47 +219,70 @@ $recent_activities = getActivityLog($user_id, 5);
             </div>
         </div>
         
-        <div class="dashboard-grid">
+<div class="dashboard-grid">
             <!-- Tasks -->
-            <div class="card">
-                <h3>My Tasks <a href="task.php" class="view-all">View All</a></h3>
-                <ul class="task-list">
-                    <?php if (!empty($tasks)) : ?>
-                        <?php $displayed_tasks = 0; ?>
-                        <?php foreach ($tasks as $task) : ?>
-                            <?php if ($displayed_tasks < 3) : ?>
-                                <li class="task-item">
-                                    <input type="checkbox" class="task-checkbox" 
-                                        <?php echo $task['status'] == 'completed' ? 'checked' : ''; ?> 
-                                        onchange="updateTaskStatus(<?php echo $task['id']; ?>, this.checked ? 'completed' : 'pending')">
-                                    <div class="task-content">
-                                        <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                        <div class="task-meta">
-                                            <div>Due: <?php echo $task['due_date'] ? date('M j, Y', strtotime($task['due_date'])) : 'No due date'; ?></div>
-                                            <div class="task-priority priority-<?php echo $task['priority']; ?>">
-                                                <?php echo ucfirst($task['priority']); ?>
-                                            </div>
-                                            <div class="status-<?php echo $task['status']; ?>">
-                                                <?php echo ucfirst(str_replace('-', ' ', $task['status'])); ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </li>
-                                <?php $displayed_tasks++; ?>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    <?php else : ?>
-                        <li class="task-item">
-                            <div class="task-content">
-                                <div class="task-title">No tasks found</div>
-                                <div class="task-meta">
-                                    <div>Create your first task to get started</div>
+           <!-- Tasks -->
+<div class="card">
+    <h3>
+        <?php 
+        if ($role === 'admin') {
+            echo 'All Team Tasks';
+        } else {
+            echo 'My Assigned Tasks';
+        }
+        ?> 
+        <a href="task.php" class="view-all">View All</a>
+    </h3>
+    <ul class="task-list">
+        <?php if (!empty($tasks)) : ?>
+            <?php $displayed_tasks = 0; ?>
+            <?php foreach ($tasks as $task) : ?>
+                <?php if ($displayed_tasks < 3) : ?>
+                    <li class="task-item">
+                        <input type="checkbox" class="task-checkbox" 
+                            <?php echo $task['status'] == 'completed' ? 'checked' : ''; ?> 
+                            onchange="updateTaskStatus(<?php echo $task['id']; ?>, this.checked ? 'completed' : 'pending')">
+                        <div class="task-content">
+                            <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                            <div class="task-meta">
+                                <div>Due: <?php echo $task['due_date'] ? date('M j, Y', strtotime($task['due_date'])) : 'No due date'; ?></div>
+                                <div class="task-priority priority-<?php echo $task['priority']; ?>">
+                                    <?php echo ucfirst($task['priority']); ?>
                                 </div>
+                                <div class="status-<?php echo $task['status']; ?>">
+                                    <?php echo ucfirst(str_replace('-', ' ', $task['status'])); ?>
+                                </div>
+                                <?php if ($role === 'admin') : ?>
+                                    <div class="task-assignee">
+                                        <small>Assigned to: <?php echo htmlspecialchars($task['assigned_name']); ?></small>
+                                    </div>
+                                <?php endif; ?>
                             </div>
-                        </li>
-                    <?php endif; ?>
-                </ul>
-            </div>
+                        </div>
+                    </li>
+                    <?php $displayed_tasks++; ?>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        <?php else : ?>
+            <li class="task-item">
+                <div class="task-content">
+                    <div class="task-title">No tasks found</div>
+                    <div class="task-meta">
+                        <div>
+                            <?php 
+                            if ($role === 'admin') {
+                                echo 'No tasks created yet';
+                            } else {
+                                echo 'No tasks assigned to you yet';
+                            }
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            </li>
+        <?php endif; ?>
+    </ul>
+</div>
             
             <!-- Quick Actions
             <div class="card">

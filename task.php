@@ -170,12 +170,22 @@ if ($user_result->num_rows > 0) {
             <?php echo $error_message; ?>
         </div>
         <?php endif; ?>
-        
-        <div class="card">
-            <div class="card-header">
-                <h2>My Tasks</h2>
-                <button class="btn btn-primary" id="addTaskBtn"><i class="fas fa-plus"></i> Add New Task</button>
-            </div>
+                            
+                            <div class="card">
+                            <div class="card-header">
+                        <h2>
+                            <?php 
+                            if ($role === 'admin') {
+                                echo 'All Tasks';
+                            } else {
+                                echo 'My Tasks';
+                            }
+                            ?>
+                        </h2>
+                        <?php if ($role === 'admin') : ?>
+                            <button class="btn btn-primary" id="addTaskBtn"><i class="fas fa-plus"></i> Add New Task</button>
+                        <?php endif; ?>
+                    </div>
             
             <div class="filters">
                 <div class="filter-item">
@@ -221,14 +231,18 @@ if ($user_result->num_rows > 0) {
                                 <div>Assigned to: <?php echo htmlspecialchars($task['assigned_name']); ?></div>
                             </div>
                         </div>
-                        <div class="task-actions">
+                       <div class="task-actions">
+                        <?php if ($role === 'admin' || $task['created_by'] == $user_id) : ?>
                             <button title="Edit" onclick="editTask(<?php echo $task['id']; ?>)"><i class="fas fa-edit"></i></button>
                             <form method="POST" style="display:inline;">
                                 <input type="hidden" name="delete_task" value="1">
                                 <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                 <button type="submit" title="Delete" onclick="return confirm('Are you sure you want to delete this task?')"><i class="fas fa-trash"></i></button>
                             </form>
-                        </div>
+                        <?php else : ?>
+                            <span class="view-only">View Only</span>
+                        <?php endif; ?>
+                    </div>
                     </li>
                     <?php endforeach; ?>
                 <?php else: ?>
@@ -457,7 +471,6 @@ function loadNotifications() {
 // auto-refresh notifications every 10s
 setInterval(loadNotifications, 10000);
 window.onload = loadNotifications;
-
 
 
 

@@ -10,37 +10,41 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $user_id = $_SESSION['user_id'];
-$user = getUserDetails($user_id);
-
-if ($user['role'] !== 'admin') {
-    header("Location: dashboard.php");
-    exit;
-}
 
 // Fetch user role from database
-$user_id = $_SESSION['user_id'];
-$sql = "SELECT role, name FROM users WHERE id='$user_id' LIMIT 1";
-$result = $conn->query($sql);
+$sql = "SELECT role, name FROM users WHERE id = ? LIMIT 1";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
     $role = $user['role'];
     $user_name = $user['name'];
 } else {
-    // User not found in database, logout
     session_destroy();
     header("Location: index.php");
     exit();
 }
 
-// Get report data based on filters
+// Check if user is admin
+if ($role !== 'admin') {
+    header("Location: dashboard.php");
+    exit;
+}
+
+// Initialize variables
 $report_data = [];
 $stats = [
     'total_customers' => 0,
     'new_customers' => 0,
     'tasks_completed' => 0,
-    'conversion_rate' => 0
+    'conversion_rate' => 0,
+    'tasks_created' => 0,
+    'total_users' => 0
 ];
+$report_type = 'sales'; // Default report type
 
 // Process filters if form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -51,14 +55,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'end_date' => $_POST['end_date'] ?? ''
     ];
     
+    $report_type = $filters['report_type'];
+    
     // Generate report based on filters
     $report_data = generateReportData($filters);
-    $stats = calculateStats($report_data);
+    $stats = calculateStats($report_data, $report_type);
 }
 
 // Get all reports for the current user
-$user_reports = getReports($_SESSION['user_id']);
+$user_reports = getReports($user_id);
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,7 +74,7 @@ $user_reports = getReports($_SESSION['user_id']);
     <title>Reports - CRM System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-     <link rel="stylesheet" href="reports/reports.css">
+    <link rel="stylesheet" href="reports/reports.css">
 </head>
 <body>
     <!-- Sidebar -->
@@ -77,7 +84,7 @@ $user_reports = getReports($_SESSION['user_id']);
         <a href="customers.php"><i class="fas fa-users"></i> <span>Customers</span></a>
         <?php if ($role === 'admin') : ?>
             <a href="users.php"><i class="fas fa-user-cog"></i> <span>Users</span></a>
-            <a href="reports.php"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
+            <a href="reports.php" class="active"><i class="fas fa-chart-pie"></i> <span>Reports</span></a>
             <a href="settings.php"><i class="fas fa-cog"></i> <span>Settings</span></a>
         <?php endif; ?>
         <a href="task.php"><i class="fas fa-tasks"></i> <span>Tasks</span></a>
@@ -91,7 +98,7 @@ $user_reports = getReports($_SESSION['user_id']);
         </button>
         
         <div class="header">
-            <h2>Reports & Analytics</h2>
+            <h2>Reports</h2>
             <div class="header-actions">
                 <div class="notification" id="notificationBell">
                     <i class="fas fa-bell"></i>
@@ -115,10 +122,10 @@ $user_reports = getReports($_SESSION['user_id']);
                 <div class="filter-item">
                     <label for="reportType">Report Type</label>
                     <select id="reportType" name="report_type">
-                        <option value="sales" <?= ($_POST['report_type'] ?? 'sales') === 'sales' ? 'selected' : '' ?>>Sales Performance</option>
-                        <option value="customers" <?= ($_POST['report_type'] ?? '') === 'customers' ? 'selected' : '' ?>>Customer Analytics</option>
-                        <option value="tasks" <?= ($_POST['report_type'] ?? '') === 'tasks' ? 'selected' : '' ?>>Task Completion</option>
-                        <option value="users" <?= ($_POST['report_type'] ?? '') === 'users' ? 'selected' : '' ?>>User Activity</option>
+                        <option value="sales" <?= ($report_type ?? 'sales') === 'sales' ? 'selected' : '' ?>>Sales Performance</option>
+                        <option value="customers" <?= ($report_type ?? '') === 'customers' ? 'selected' : '' ?>>Customer Analytics</option>
+                        <option value="tasks" <?= ($report_type ?? '') === 'tasks' ? 'selected' : '' ?>>Task Completion</option>
+                        <option value="users" <?= ($report_type ?? '') === 'users' ? 'selected' : '' ?>>User Activity</option>
                     </select>
                 </div>
                 <div class="filter-item">
@@ -146,98 +153,141 @@ $user_reports = getReports($_SESSION['user_id']);
             </div>
         </form>
         
+        <!-- Updated Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>Total Customers</h3>
-                <div class="value"><?= $stats['total_customers'] ?></div>
-                <div class="change positive">+12% from last month</div>
+                <h3>
+                    <?php 
+                    if ($report_type === 'tasks') {
+                        echo 'Total Tasks';
+                    } elseif ($report_type === 'users') {
+                        echo 'Total Users';
+                    } else {
+                        echo 'Total Customers';
+                    }
+                    ?>
+                </h3>
+                <div class="value">
+                    <?php 
+                    if ($report_type === 'tasks') {
+                        echo $stats['tasks_created'] ?? 0;
+                    } elseif ($report_type === 'users') {
+                        echo $stats['total_users'] ?? 0;
+                    } else {
+                        echo $stats['total_customers'] ?? 0;
+                    }
+                    ?>
+                </div>
+                <div class="change positive">Based on selected filters</div>
             </div>
+            
             <div class="stat-card">
-                <h3>New Customers</h3>
-                <div class="value"><?= $stats['new_customers'] ?></div>
-                <div class="change positive">+8% from last month</div>
+                <h3>
+                    <?php 
+                    if ($report_type === 'tasks') {
+                        echo 'Tasks Completed';
+                    } elseif ($report_type === 'users') {
+                        echo 'Tasks Completed';
+                    } else {
+                        echo 'New Customers';
+                    }
+                    ?>
+                </h3>
+                <div class="value">
+                    <?php 
+                    if ($report_type === 'tasks' || $report_type === 'users') {
+                        echo $stats['tasks_completed'] ?? 0;
+                    } else {
+                        echo $stats['new_customers'] ?? 0;
+                    }
+                    ?>
+                </div>
+                <div class="change positive">During period</div>
             </div>
+            
             <div class="stat-card">
-                <h3>Tasks Completed</h3>
-                <div class="value"><?= $stats['tasks_completed'] ?>%</div>
-                <div class="change positive">+5% from last month</div>
-            </div>
-            <div class="stat-card">
-                <h3>Conversion Rate</h3>
-                <div class="value"><?= $stats['conversion_rate'] ?>%</div>
-                <div class="change negative">-2% from last month</div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header">
-                <h2>Customer Acquisition</h2>
-                <div class="report-actions">
-                    <button class="btn btn-outline"><i class="fas fa-table"></i> View Data</button>
-                    <button class="btn btn-outline"><i class="fas fa-chart-bar"></i> Bar Chart</button>
-                    <button class="btn btn-outline"><i class="fas fa-chart-line"></i> Line Chart</button>
+                <h3>Completion Rate</h3>
+                <div class="value"><?= $stats['conversion_rate'] ?? 0 ?>%</div>
+                <div class="change <?= ($stats['conversion_rate'] ?? 0) >= 70 ? 'positive' : 'negative' ?>">
+                    <?= ($stats['conversion_rate'] ?? 0) >= 70 ? 'Good' : 'Needs improvement' ?>
                 </div>
             </div>
             
-            <div class="chart-container">
-                <canvas id="acquisitionChart"></canvas>
+            <div class="stat-card">
+                <h3>Data Points</h3>
+                <div class="value"><?= count($report_data) ?></div>
+                <div class="change positive">Records found</div>
             </div>
         </div>
         
-        <div class="card">
-            <div class="card-header">
-                <h2>Task Completion Rates</h2>
-            </div>
-            
-            <div class="chart-container">
-                <canvas id="taskChart"></canvas>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header">
-                <h2>Report Data</h2>
-            </div>
-            
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
+        <!-- Rest of your HTML content remains the same -->
+        <!-- ... -->
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <?php if ($report_type === 'users'): ?>
+                    <th>User Name</th>
+                    <th>Total Tasks</th>
+                    <th>Completed Tasks</th>
+                    <th>Completion Rate</th>
+                <?php else: ?>
+                    <th>Date</th>
+                    <?php if (in_array($report_type, ['sales', 'customers'])): ?>
                         <th>New Customers</th>
+                        <?php if ($report_type === 'customers'): ?>
+                            <th>Total Customers</th>
+                        <?php endif; ?>
+                    <?php elseif ($report_type === 'tasks'): ?>
                         <th>Tasks Created</th>
                         <th>Tasks Completed</th>
-                        <th>Conversion Rate</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($report_data)): ?>
-                        <?php foreach ($report_data as $data): ?>
-                        <tr>
-                            <td><?= $data['date'] ?></td>
-                            <td><?= $data['new_customers'] ?></td>
-                            <td><?= $data['tasks_created'] ?></td>
-                            <td><?= $data['tasks_completed'] ?></td>
-                            <td><?= $data['conversion_rate'] ?>%</td>
-                        </tr>
-                        <?php endforeach; ?>
+                        <th>Completion Rate</th>
                     <?php else: ?>
-                        <tr>
-                            <td colspan="5" style="text-align: center;">No data available. Apply filters to generate a report.</td>
-                        </tr>
+                        <th>New Customers</th>
                     <?php endif; ?>
-                </tbody>
-            </table>
-            
-            <div class="pagination">
-                <button>1</button>
-                <button>2</button>
-                <button class="active">3</button>
-                <button>4</button>
-                <button>5</button>
-            </div>
-        </div>
+                <?php endif; ?>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (!empty($report_data)): ?>
+                <?php foreach ($report_data as $data): ?>
+                <tr>
+                    <?php if ($report_type === 'users'): ?>
+                        <td><?= htmlspecialchars($data['user_name'] ?? 'N/A') ?></td>
+                        <td><?= htmlspecialchars($data['total_tasks'] ?? '0') ?></td>
+                        <td><?= htmlspecialchars($data['completed_tasks'] ?? '0') ?></td>
+                        <td><?= htmlspecialchars($data['completion_rate'] ?? '0') ?>%</td>
+                    <?php else: ?>
+                        <td><?= htmlspecialchars($data['date'] ?? '') ?></td>
+                        <?php if (in_array($report_type, ['sales', 'customers'])): ?>
+                            <td><?= htmlspecialchars($data['new_customers'] ?? '0') ?></td>
+                            <?php if ($report_type === 'customers'): ?>
+                                <td><?= htmlspecialchars($data['total_customers'] ?? '0') ?></td>
+                            <?php endif; ?>
+                        <?php elseif ($report_type === 'tasks'): ?>
+                            <td><?= htmlspecialchars($data['tasks_created'] ?? '0') ?></td>
+                            <td><?= htmlspecialchars($data['tasks_completed'] ?? '0') ?></td>
+                            <td><?= htmlspecialchars($data['completion_rate'] ?? '0') ?>%</td>
+                        <?php else: ?>
+                            <td><?= htmlspecialchars($data['new_customers'] ?? '0') ?></td>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <tr>
+                    <td colspan="4" style="text-align: center;">
+                        <?php echo ($_SERVER['REQUEST_METHOD'] === 'POST') ? 'No data found for the selected filters.' : 'Apply filters to generate a report.'; ?>
+                    </td>
+                </tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
+
+
+
         
-        <div class="card saved-reports">
+<div class="card saved-reports">
             <div class="card-header">
                 <h2>Saved Reports</h2>
             </div>
@@ -263,7 +313,7 @@ $user_reports = getReports($_SESSION['user_id']);
                 </div>
             <?php endif; ?>
         </div>
-    </div>
+</div>
 
     <script>
         // Toggle sidebar on mobile
@@ -394,17 +444,51 @@ $user_reports = getReports($_SESSION['user_id']);
             }
         });
 
-    function loadNotifications() {
-    fetch('notifications.php')
-        .then(res => res.json())
-        .then(data => {
-            const count = data.count;
-            const badge = document.getElementById('notificationCount');
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'inline-block' : 'none';
-        });
+        function loadNotifications() {
+            fetch('notifications.php')
+                .then(res => res.json())
+                .then(data => {
+                    const count = data.count;
+                    const badge = document.getElementById('notificationCount');
+                    badge.textContent = count;
+                    badge.style.display = count > 0 ? 'inline-block' : 'none';
+                });
+        }
+
+        // Load notifications on page load
+        loadNotifications();
+
+        // Update charts with real data
+function updateChartsWithRealData(reportType, reportData) {
+    if (reportType === 'sales' || reportType === 'customers') {
+        // Update customer acquisition chart
+        const dates = reportData.map(item => item.date);
+        const newCustomers = reportData.map(item => parseInt(item.new_customers) || 0);
+        
+        acquisitionChart.data.labels = dates;
+        acquisitionChart.data.datasets[0].data = newCustomers;
+        acquisitionChart.update();
+    }
+    
+    if (reportType === 'tasks') {
+        // Update task chart
+        const dates = reportData.map(item => item.date);
+        const tasksCreated = reportData.map(item => parseInt(item.tasks_created) || 0);
+        const tasksCompleted = reportData.map(item => parseInt(item.tasks_completed) || 0);
+        
+        taskChart.data.labels = dates;
+        taskChart.data.datasets[0].data = tasksCreated;
+        taskChart.data.datasets[1].data = tasksCompleted;
+        taskChart.update();
+    }
 }
 
+// Call this function after form submission
+<?php if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($report_data)): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    updateChartsWithRealData('<?php echo $report_type ?>', <?php echo json_encode($report_data) ?>);
+});
+<?php endif; ?>
     </script>
 </body>
 </html>
