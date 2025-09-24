@@ -41,11 +41,13 @@ if (isset($_POST['update_user'])) {
     $email = $_POST['email'];
     $role_update = $_POST['role'];
 
+    // MODIFIED: Password is now required for update
     if (!empty($_POST['password'])) {
         $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
         $stmt = $conn->prepare("UPDATE users SET name=?, email=?, password=?, role=? WHERE id=?");
         $stmt->bind_param("ssssi", $name, $email, $password, $role_update, $id);
     } else {
+        // This 'else' block is now less likely to be hit due to 'required' in HTML, but is good for safety.
         $stmt = $conn->prepare("UPDATE users SET name=?, email=?, role=? WHERE id=?");
         $stmt->bind_param("sssi", $name, $email, $role_update, $id);
     }
@@ -100,35 +102,17 @@ if (isset($_GET['edit'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <title>Manage Users</title>
     <style>
-        /* Styles for User Management Page */
-        .header {
-            background: white; padding: 18px 25px; border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex;
-            justify-content: space-between; align-items: center;
-        }
+        .header { background: white; padding: 18px 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
         .header h2 { margin: 0; font-size: 24px; color: #333; }
         .header-actions { display: flex; align-items: center; gap: 15px; }
         .user-profile { display: flex; align-items: center; gap: 10px; }
-        .user-avatar {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: var(--primary); color: white;
-            display: flex; justify-content: center; align-items: center; font-weight: bold;
-        }
-        .card {
-            background: white; padding: 25px; border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow); margin-bottom: 25px;
-        }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; }
+        .card { background: white; padding: 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; }
         .card h3 { margin-top: 0; margin-bottom: 20px; font-size: 20px; color: #333; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 12px; border: 1px solid #ddd;
-            border-radius: 8px; font-size: 14px; box-sizing: border-box;
-        }
-        .btn {
-            padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer;
-            font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block;
-        }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block; }
         .btn-primary { background-color: var(--primary); color: white; }
         .btn-secondary { background-color: #f1f5f9; color: #334155; }
         .btn-edit { background: #fff4e6; color: #d97706; padding: 8px 16px; font-size: 13px; }
@@ -137,10 +121,7 @@ if (isset($_GET['edit'])) {
         .search-bar input { flex-grow: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         table th, table td { padding: 16px; text-align: left; border-bottom: 1px solid #eee; }
-        table th {
-            background: #f8f9fa; color: #555; font-size: 12px;
-            font-weight: 600; text-transform: uppercase;
-        }
+        table th { background: #f8f9fa; color: #555; font-size: 12px; font-weight: 600; text-transform: uppercase; }
         table tr:hover { background-color: #f9fafb; }
         .role-badge { padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
         .role-admin { background-color: #e6f4ff; color: var(--primary); }
@@ -180,7 +161,7 @@ if (isset($_GET['edit'])) {
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="<?php echo $editUser ? 'New Password (leave blank)' : 'Password'; ?>" <?php echo $editUser ? '' : 'required'; ?>>
+                    <input type="password" id="password" name="password" placeholder="<?php echo $editUser ? 'Enter new password' : 'Password'; ?>" required>
                 </div>
                 <div class="form-group">
                     <label for="role">Role</label>

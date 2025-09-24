@@ -27,11 +27,14 @@ function getTasks() {
 
     if ($role === 'user') {
         $sql .= " WHERE t.assigned_to = ?";
-        $stmt = $conn->prepare($sql);
+    }
+
+    $sql .= " ORDER BY t.id DESC"; // Sorts by the newest task first
+
+    $stmt = $conn->prepare($sql);
+
+    if ($role === 'user') {
         $stmt->bind_param("i", $user_id);
-    } else {
-        $sql .= " ORDER BY t.due_date ASC";
-        $stmt = $conn->prepare($sql);
     }
 
     $stmt->execute();
@@ -61,23 +64,61 @@ function createTask($data) {
     return false;
 }
 
-function updateTask($data) {
+function updateTask($data, $admin_edit = false) {
     global $conn;
-    $sql = "UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ?, status = ?, assigned_to = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssssii",
-        $data['title'], $data['description'], $data['due_date'],
-        $data['priority'], $data['status'], $data['assigned_to'], $data['task_id']
-    );
-    return $stmt->execute();
+    
+    // Admin edit from modal does not include status
+    if ($admin_edit) {
+        $sql = "UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ?, assigned_to = ? WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ssssii",
+            $data['title'], $data['description'], $data['due_date'],
+            $data['priority'], $data['assigned_to'], $data['task_id']
+        );
+    } else {
+        // Full update, including status
+        $sql = "UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ?, status = ?, assigned_to = ? WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("sssssii",
+            $data['title'], $data['description'], $data['due_date'],
+            $data['priority'], $data['status'], $data['assigned_to'], $data['task_id']
+        );
+    }
+    
+    if ($stmt->execute()) {
+        $message = "Your assigned task has been updated: \"" . htmlspecialchars($data['title']) . "\"";
+        createNotification($data['assigned_to'], "Task Updated", $message, 'task', $data['task_id']);
+        return true;
+    }
+    return false;
 }
 
+// MODIFIED: This function now sends a notification upon a successful deletion.
 function deleteTask($task_id) {
     global $conn;
+
+    // First, get the task details before deleting it
+    $details_stmt = $conn->prepare("SELECT title, assigned_to FROM tasks WHERE id = ?");
+    $details_stmt->bind_param("i", $task_id);
+    $details_stmt->execute();
+    $result = $details_stmt->get_result();
+    $task_details = $result->fetch_assoc();
+    $details_stmt->close();
+
+    // Now, delete the task
     $sql = "DELETE FROM tasks WHERE id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $task_id);
-    return $stmt->execute();
+    
+    if ($stmt->execute()) {
+        // If deletion was successful and we have the task details, create a notification
+        if ($task_details) {
+            $message = "A task assigned to you was deleted: \"" . htmlspecialchars($task_details['title']) . "\"";
+            createNotification($task_details['assigned_to'], "Task Deleted", $message, 'task', $task_id);
+        }
+        return true;
+    }
+    return false;
 }
 
 function updateTaskStatus($task_id, $status) {
@@ -91,8 +132,7 @@ function updateTaskStatus($task_id, $status) {
             $task_details_stmt = $conn->prepare("SELECT title FROM tasks WHERE id = ?");
             $task_details_stmt->bind_param("i", $task_id);
             $task_details_stmt->execute();
-            $task_details_result = $task_details_stmt->get_result();
-            $task_details = $task_details_result->fetch_assoc();
+            $task_details = $task_details_stmt->get_result()->fetch_assoc();
             $task_title = $task_details['title'] ?? 'a task';
             $user_name = $_SESSION['name'];
             $message = "$user_name updated task status to '$status': \"" . htmlspecialchars($task_title) . "\"";
@@ -107,7 +147,7 @@ function updateTaskStatus($task_id, $status) {
 }
 
 
-// --- User Functions ---
+// --- User & Settings Functions ---
 
 function getAllUsers() {
     global $conn;
@@ -168,9 +208,6 @@ function updatePassword($user_id, $current_password, $new_password) {
     return false;
 }
 
-
-// --- Settings Functions ---
-
 function getUserSettings($user_id) {
     global $conn;
     $sql = "SELECT * FROM user_settings WHERE user_id = ?";
@@ -189,23 +226,6 @@ function getUserSettings($user_id) {
     return $settings;
 }
 
-function getSystemSettings() {
-    global $conn;
-    $sql = "SELECT * FROM system_settings ORDER BY id DESC LIMIT 1";
-    $result = $conn->query($sql);
-    if ($result && $result->num_rows > 0) {
-        return $result->fetch_assoc();
-    }
-    return [
-        'company_name' => 'Your Company Inc.', 'auto_backup' => 1, 'backup_frequency' => 'weekly',
-        'backup_location' => 'local', 'email_notifications' => 1, 'timezone' => 'UTC',
-        'date_format' => 'mm/dd/yyyy', 'time_format' => '12', 'items_per_page' => 25
-    ];
-}
-
-
-// --- Report Functions ---
-
 function getReports($user_id) {
     global $conn;
     $sql = "SELECT * FROM reports WHERE created_by = ? ORDER BY created_at DESC";
@@ -221,9 +241,6 @@ function getReports($user_id) {
     }
     return $reports;
 }
-
-
-// --- Activity Log Functions ---
 
 function logActivity($user_id, $activity_type, $description) {
     global $conn;

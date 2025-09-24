@@ -19,8 +19,6 @@ $user_name = $user['name'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $message = '';
     $is_error = false;
-
-    // Create Task
     if (isset($_POST['create_task'])) {
         $task_data = [
             'title' => $_POST['title'], 'description' => $_POST['description'],
@@ -34,23 +32,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to create task."; $is_error = true;
         }
     }
-
-    // Update Task
     if (isset($_POST['update_task'])) {
         $task_data = [
             'task_id' => $_POST['task_id'], 'title' => $_POST['title'],
             'description' => $_POST['description'], 'due_date' => $_POST['due_date'],
-            'priority' => $_POST['priority'], 'status' => $_POST['status'],
-            'assigned_to' => $_POST['assigned_to']
+            'priority' => $_POST['priority'], 'assigned_to' => $_POST['assigned_to']
         ];
-        if (updateTask($task_data)) {
+        if (updateTask($task_data, true)) { // Pass true for admin edit
             $message = "Task updated successfully!";
         } else {
             $message = "Failed to update task."; $is_error = true;
         }
     }
-
-    // Delete Task
     if (isset($_POST['delete_task'])) {
         if (deleteTask($_POST['task_id'])) {
             $message = "Task deleted successfully!";
@@ -58,8 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to delete task."; $is_error = true;
         }
     }
-
-    // Update Task Status
     if (isset($_POST['update_task_status'])) {
         if (updateTaskStatus($_POST['task_id'] ?? 0, $_POST['status'] ?? 'pending')) {
             $message = "Task status updated!";
@@ -67,13 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Failed to update status."; $is_error = true;
         }
     }
-    
     $_SESSION['flash_message'] = ['text' => $message, 'type' => $is_error ? 'error' : 'success'];
     header("Location: task.php");
     exit();
 }
 
-// Display flash message after redirect
 if (isset($_SESSION['flash_message'])) {
     $flash_message = $_SESSION['flash_message'];
     unset($_SESSION['flash_message']);
@@ -173,25 +162,7 @@ if ($user_result) {
             </div>
             
             <div class="filters">
-                <div class="filter-item">
-                    <label for="statusFilter">Filter by Status</label>
-                    <select id="statusFilter">
-                        <option value="all">All</option>
-                        <option value="pending">Pending</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                    </select>
                 </div>
-                <div class="filter-item">
-                    <label for="priorityFilter">Filter by Priority</label>
-                    <select id="priorityFilter">
-                        <option value="all">All</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                </div>
-            </div>
             
             <ul class="task-list" id="taskList">
                 <?php if (!empty($tasks)): foreach ($tasks as $task): ?>
@@ -200,7 +171,7 @@ if ($user_result) {
                         <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
                         <div class="task-description"><?php echo htmlspecialchars($task['description'] ?? ''); ?></div>
                         <div class="task-meta">
-                            <div><i class="fas fa-calendar-alt"></i> <span class="due-date"><?php echo date("M j, Y", strtotime($task['due_date'])); ?></span></div>
+                            <div><i class="fas fa-calendar-alt"></i> <span><?php echo date("M j, Y", strtotime($task['due_date'])); ?></span></div>
                             <div class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></div>
                             <div class="task-status status-<?php echo $task['status']; ?>"><?php echo ucfirst(str_replace('-', ' ', $task['status'])); ?></div>
                             <?php if ($role === 'admin'): ?>
@@ -210,12 +181,14 @@ if ($user_result) {
                     </div>
                     <div class="task-actions">
                          <?php if ($role === 'user' && $task['status'] !== 'completed'): ?>
+                            <?php if ($task['status'] === 'pending'): ?>
                             <form method="POST" style="display:inline;">
                                 <input type="hidden" name="update_task_status" value="1">
                                 <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                 <input type="hidden" name="status" value="in-progress">
                                 <button type="submit" class="btn">Start Task</button>
                             </form>
+                            <?php endif; ?>
                              <form method="POST" style="display:inline;">
                                 <input type="hidden" name="update_task_status" value="1">
                                 <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
@@ -224,7 +197,7 @@ if ($user_result) {
                             </form>
                         <?php endif; ?>
                         
-                        <?php if ($role === 'admin') : ?>
+                        <?php if ($role === 'admin' && $task['status'] !== 'completed') : ?>
                             <button title="Edit" onclick="editTask(this)" data-task='<?= htmlspecialchars(json_encode($task), ENT_QUOTES, 'UTF-8') ?>'><i class="fas fa-edit"></i></button>
                             <form method="POST" onsubmit="return confirm('Delete this task?');" style="display:inline;">
                                 <input type="hidden" name="delete_task" value="1">
@@ -237,7 +210,7 @@ if ($user_result) {
                 <?php endforeach; else: ?>
                 <div class="empty-state">
                     <i class="fas fa-check-square"></i>
-                    <p>No tasks found. Great job, or time to create one!</p>
+                    <p>No tasks found.</p>
                 </div>
                 <?php endif; ?>
             </ul>
@@ -273,9 +246,10 @@ if ($user_result) {
                         <option value="high">High</option>
                     </select>
                 </div>
-                <div class="form-group" id="status-group">
-                    <label for="taskStatus">Status *</label>
-                    <select id="taskStatus" name="status" required>
+                <div class="form-group" id="status-group" style="display: none;">
+                    <label for="taskStatus">Status</label>
+                    <input type="hidden" id="taskStatusHidden" name="status">
+                    <select id="taskStatus" disabled>
                         <option value="pending">Pending</option>
                         <option value="in-progress">In Progress</option>
                         <option value="completed">Completed</option>
@@ -307,7 +281,10 @@ if ($user_result) {
         const cancelBtn = document.getElementById('cancelTask');
         const closeModalBtn = taskModal.querySelector('.close');
         const statusGroup = document.getElementById('status-group');
-
+        const taskDueDateInput = document.getElementById('taskDueDate');
+        
+        const today = new Date().toISOString().split('T')[0];
+        
         function openModal() { taskModal.style.display = 'flex'; }
         function closeModal() { taskModal.style.display = 'none'; }
 
@@ -318,6 +295,7 @@ if ($user_result) {
                 formAction.name = 'create_task';
                 document.getElementById('taskId').value = '';
                 statusGroup.style.display = 'none';
+                taskDueDateInput.setAttribute('min', today); // Set min date for new tasks
                 openModal();
             });
         }
@@ -332,34 +310,17 @@ if ($user_result) {
             document.getElementById('taskTitle').value = task.title;
             document.getElementById('taskDescription').value = task.description;
             document.getElementById('taskDueDate').value = task.due_date;
+            taskDueDateInput.setAttribute('min', today); // MODIFIED: Set min date for edit form as well
             document.getElementById('taskPriority').value = task.priority;
-            document.getElementById('taskStatus').value = task.status;
             document.getElementById('taskAssignedTo').value = task.assigned_to;
+            document.getElementById('taskStatus').value = task.status;
+            document.getElementById('taskStatusHidden').value = task.status;
             openModal();
         }
 
         cancelBtn.addEventListener('click', closeModal);
         closeModalBtn.addEventListener('click', closeModal);
         window.addEventListener('click', (e) => { if (e.target === taskModal) closeModal(); });
-
-        const statusFilter = document.getElementById('statusFilter');
-        const priorityFilter = document.getElementById('priorityFilter');
-        
-        function filterTasks() {
-            const statusValue = statusFilter.value;
-            const priorityValue = priorityFilter.value;
-            
-            document.querySelectorAll('.task-item').forEach(task => {
-                const taskStatus = task.querySelector('.task-status').textContent.toLowerCase().replace(' ', '-');
-                const taskPriority = task.querySelector('.task-priority').textContent.toLowerCase();
-                const statusMatch = statusValue === 'all' || taskStatus.includes(statusValue);
-                const priorityMatch = priorityValue === 'all' || taskPriority.includes(priorityValue);
-                task.style.display = (statusMatch && priorityMatch) ? 'flex' : 'none';
-            });
-        }
-        
-        statusFilter.addEventListener('change', filterTasks);
-        priorityFilter.addEventListener('change', filterTasks);
     </script>
 </body>
 </html>

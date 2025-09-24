@@ -115,10 +115,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <a href="reports.php" class="<?php echo ($currentPage == 'reports.php') ? 'active' : ''; ?>">
             <i class="fas fa-chart-pie"></i> <span>Reports</span>
         </a>
-        <a href="settings.php" class="<?php echo ($currentPage == 'settings.php') ? 'active' : ''; ?>">
-            <i class="fas fa-cog"></i> <span>Settings</span>
-        </a>
+       
     <?php endif; ?>
+    
+    <a href="settings.php" class="<?php echo ($currentPage == 'settings.php') ? 'active' : ''; ?>">
+        <i class="fas fa-cog"></i> <span>Settings</span>
 
     <a href="task.php" class="<?php echo ($currentPage == 'task.php') ? 'active' : ''; ?>">
         <i class="fas fa-tasks"></i> <span>Tasks</span>
