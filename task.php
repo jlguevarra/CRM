@@ -86,12 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ✅ Update Task Status
     if (isset($_POST['update_task_status'])) {
-        $task_id = $_POST['task_id'];
-        $status = $_POST['status'];
-
-        if (updateTaskStatus($task_id, $status)) {
-            $tasks = getTasks();
-        }
+    $task_id = $_POST['task_id'] ?? 0;
+    $status = $_POST['status'] ?? 'pending'; // Default to pending
+    
+    if (updateTaskStatus($task_id, $status)) {
+        $tasks = getTasks(); // Refresh tasks list
+    }
     }
 }
 
@@ -216,11 +216,13 @@ if ($user_result->num_rows > 0) {
                 <?php if (!empty($tasks)): ?>
                     <?php foreach ($tasks as $task): ?>
                     <li class="task-item" data-id="<?php echo $task['id']; ?>">
-                        <form method="POST" class="task-status-form">
-                            <input type="hidden" name="update_task_status" value="1">
-                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                            <input type="checkbox" class="task-checkbox" name="status" value="completed" <?php echo $task['status'] === 'completed' ? 'checked' : ''; ?> onchange="this.form.submit()">
-                        </form>
+                  <form method="POST" class="task-status-form">
+                        <input type="hidden" name="update_task_status" value="1">
+                        <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                        <input type="hidden" name="status" value="<?php echo $task['status']; ?>">
+                        <input type="checkbox" class="task-checkbox" <?php echo $task['status'] === 'completed' ? 'checked' : ''; ?> 
+                            onchange="this.previousElementSibling.value = this.checked ? 'completed' : 'pending'; this.form.submit()">
+                    </form>
                         <div class="task-content">
                             <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
                             <div class="task-description"><?php echo htmlspecialchars($task['description'] ?? ''); ?></div>
