@@ -390,63 +390,121 @@ $recent_activities = getActivityLog($user_id, 5);
         document.body.appendChild(form);
         form.submit();
     }
+// Load notifications and handle interactions
+// Load notifications and handle interactions
+function loadNotifications() {
+    console.log("Loading notifications...");
+    
+    fetch('notifications.php')
+        .then(res => {
+            console.log("Notification response status:", res.status);
+            return res.json();
+        })
+        .then(data => {
+            console.log("Notifications data received:", data);
+            
+            const badge = document.getElementById('notificationCount');
+            const dropdown = document.getElementById('notificationDropdown');
 
-    // Load notifications and handle interactions
-    function loadNotifications() {
-        fetch('notifications.php')
-            .then(res => res.json())
-            .then(data => {
-                const badge = document.getElementById('notificationCount');
-                const dropdown = document.getElementById('notificationDropdown');
+            // Update badge count
+            badge.textContent = data.count;
+            badge.style.display = data.count > 0 ? 'inline-block' : 'none';
 
-                badge.textContent = data.count;
-                badge.style.display = data.count > 0 ? 'inline-block' : 'none';
-
-               dropdown.innerHTML = '';
-
-if (data.notifications.length > 0) {
-    data.notifications.forEach(n => {
-        const item = document.createElement('div');
-        item.classList.add('notification-item');
-        item.innerHTML = `
-            <p>${n.message}</p>
-            <small>${new Date(n.created_at).toLocaleString()}</small>
-        `;
-        item.onclick = () => {
-            markNotificationAsRead(n.id);
-            item.classList.add('read');
-            showToast(n.message);
-        };
-        dropdown.appendChild(item);
-    });
-} else {
-    dropdown.innerHTML = '<p class="empty">No new notifications</p>';
+            // Update dropdown content
+            dropdown.innerHTML = '';
+            
+            if (data.notifications && data.notifications.length > 0) {
+                console.log("Displaying", data.notifications.length, "notifications");
+                data.notifications.forEach(notification => {
+                    const item = document.createElement('div');
+                    item.className = `notification-item ${notification.is_read ? 'read' : 'unread'}`;
+                    item.innerHTML = `
+                        <div class="notification-title">${notification.title}</div>
+                        <div class="notification-message">${notification.message}</div>
+                        <div class="notification-time">${formatTime(notification.created_at)}</div>
+                    `;
+                    item.onclick = () => {
+                        markNotificationAsRead(notification.id);
+                        if (notification.related_type === 'task') {
+                            window.location.href = 'task.php';
+                        }
+                    };
+                    dropdown.appendChild(item);
+                });
+            } else {
+                console.log("No notifications to display");
+                dropdown.innerHTML = '<div class="notification-empty">No notifications</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading notifications:', error);
+        });
 }
 
+// Format time function
+function formatTime(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-            });
-    }
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
+}
 
-    // Mark notification as read
-    function markNotificationAsRead(id) {
-        fetch('mark_notification_read.php', {
+// Mark notification as read
+function markNotificationAsRead(notificationId) {
+    fetch('mark_notification_read.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${notificationId}`
+    })
+    .then(response => response.text())
+    .then(() => {
+        loadNotifications(); // Reload notifications
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+    });
+}
+
+// Toggle notification dropdown
+document.getElementById('notificationBell').addEventListener('click', function(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('notificationDropdown');
+    dropdown.classList.toggle('active');
+    
+    // Mark all as read when dropdown is opened
+    if (dropdown.classList.contains('active')) {
+        fetch('mark_read.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `id=${id}`
-        }).then(() => loadNotifications());
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        });
     }
+});
 
-    // Show toast popup
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = 'toast-popup';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.notification')) {
+        document.getElementById('notificationDropdown').classList.remove('active');
     }
+});
 
-    setInterval(loadNotifications, 10000);
-    window.onload = loadNotifications;
+// Load notifications on page load and refresh every 30 seconds
+loadNotifications();
+setInterval(loadNotifications, 30000);
+
+
 </script>
 
 

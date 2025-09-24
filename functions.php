@@ -761,6 +761,8 @@ function deleteTask($task_id) {
 function updateTaskStatus($task_id, $status) {
     global $conn;
     
+    error_log("Updating task $task_id to status: $status");
+    
     // Check if user has permission to update this task
     $user_id = $_SESSION['user_id'];
     $check_sql = "SELECT id FROM tasks WHERE id = ? AND (created_by = ? OR assigned_to = ?)";
@@ -770,6 +772,7 @@ function updateTaskStatus($task_id, $status) {
     $check_result = $check_stmt->get_result();
     
     if ($check_result->num_rows === 0) {
+        error_log("User $user_id doesn't have permission to update task $task_id");
         return false; // User doesn't have permission
     }
     
@@ -777,7 +780,10 @@ function updateTaskStatus($task_id, $status) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("si", $status, $task_id);
     
-    return $stmt->execute();
+    $result = $stmt->execute();
+    error_log("Task update result: " . ($result ? "success" : "failed"));
+    
+    return $result;
 }
 
 function fetchUnreadNotifications($user_id) {

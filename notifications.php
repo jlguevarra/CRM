@@ -1,20 +1,27 @@
 <?php
-require_once 'db.php';
 session_start();
+include 'config.php';
+include 'functions.php';
 
-$userId = $_SESSION['user_id'];
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header('HTTP/1.1 401 Unauthorized');
+    echo json_encode(['error' => 'Not logged in']);
+    exit();
+}
 
-$sql = "
-    SELECT n.id, n.message, n.is_read, n.created_at,
-           t.title AS task_title, t.status AS task_status
-    FROM notifications n
-    LEFT JOIN tasks t ON n.related_type = 'task' AND n.related_id = t.id
-    WHERE n.user_id = ?
-    ORDER BY n.created_at DESC
-    LIMIT 10
-";
+$user_id = $_SESSION['user_id'];
+
+// Fetch notifications for the current user
+$sql = "SELECT n.*, t.title as task_title 
+        FROM notifications n 
+        LEFT JOIN tasks t ON n.related_id = t.id AND n.related_type = 'task'
+        WHERE n.user_id = ? 
+        ORDER BY n.created_at DESC 
+        LIMIT 10";
+
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $userId);
+$stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -23,13 +30,15 @@ $unread_count = 0;
 
 while ($row = $result->fetch_assoc()) {
     $notifications[] = $row;
-    if ($row['is_read'] == 0) {
+    if (!$row['is_read']) {
         $unread_count++;
     }
 }
 
+// Return JSON response
+header('Content-Type: application/json');
 echo json_encode([
     'count' => $unread_count,
     'notifications' => $notifications
 ]);
-
+?>

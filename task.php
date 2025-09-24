@@ -22,35 +22,38 @@ $tasks = getTasks(); // Already filters by role inside the function
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ✅ Create Task
-    if (isset($_POST['create_task'])) {
-        $task_data = [
-            'title' => $_POST['title'],
-            'description' => $_POST['description'],
-            'due_date' => $_POST['due_date'],
-            'priority' => $_POST['priority'],
-            'status' => $_POST['status'],
-            'assigned_to' => $_POST['assigned_to'],
-            'created_by' => $user_id
-        ];
+   // ✅ Create Task
+if (isset($_POST['create_task'])) {
+    $task_data = [
+        'title' => $_POST['title'],
+        'description' => $_POST['description'],
+        'due_date' => $_POST['due_date'],
+        'priority' => $_POST['priority'],
+        'status' => $_POST['status'],
+        'assigned_to' => $_POST['assigned_to'],
+        'created_by' => $user_id
+    ];
 
-        if (createTask($task_data)) {
-            $task_id = $conn->insert_id;
+    if (createTask($task_data)) {
+        $task_id = $conn->insert_id;
 
-            // 🔔 Insert notification for assigned user
-            $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, related_type, related_id, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NOW())");
-            $title = "New Task Assigned";
-            $message = "You've been assigned a new task: " . $task_data['title'];
-            $type = "task";
-            $related_type = "task";
-            $stmt->bind_param("issssi", $task_data['assigned_to'], $title, $message, $type, $related_type, $task_id);
-            $stmt->execute();
+        // 🔔 Insert notification for assigned user
+        $assigned_user_id = $task_data['assigned_to'];
+        $assigned_user = getUserDetails($assigned_user_id);
+        
+        $title = "New Task Assigned";
+        $message = "You've been assigned a new task: " . $task_data['title'];
+        
+        $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, related_type, related_id, is_read, created_at) VALUES (?, ?, ?, 'task', 'task', ?, 0, NOW())");
+        $stmt->bind_param("issi", $assigned_user_id, $title, $message, $task_id);
+        $stmt->execute();
 
-            $success_message = "Task created successfully!";
-            $tasks = getTasks(); // Refresh
-        } else {
-            $error_message = "Failed to create task. Please try again.";
-        }
+        $success_message = "Task created successfully!";
+        $tasks = getTasks(); // Refresh
+    } else {
+        $error_message = "Failed to create task. Please try again.";
     }
+}
 
     // ✅ Update Task
     if (isset($_POST['update_task'])) {
