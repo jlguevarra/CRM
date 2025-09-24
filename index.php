@@ -2,8 +2,6 @@
 session_start();
 include 'config.php';
 
-
-
 if (isset($_POST['login'])) {
     $email    = $_POST['email'];
     $password = $_POST['password'];
@@ -18,7 +16,7 @@ if (isset($_POST['login'])) {
         $user = $result->fetch_assoc();
 
         if (password_verify($password, $user['password'])) {
-            // ✅ Set session variables
+            // Set session variables
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['name']    = $user['name'];
             $_SESSION['role']    = $user['role'];
@@ -27,11 +25,12 @@ if (isset($_POST['login'])) {
             header("Location: dashboard.php");
             exit();
         } else {
-            $error = "Invalid password.";
+            $error = "Invalid password. Please try again.";
         }
     } else {
-        $error = "No user found with that email.";
+        $error = "No user found with that email address.";
     }
+    $stmt->close();
 }
 ?>
 <!DOCTYPE html>
@@ -40,7 +39,19 @@ if (isset($_POST['login'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM Login</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #4a6cf7;
+            --primary-dark: #3a5ad9;
+            --light-gray: #f3f4f6;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --border-radius: 12px;
+            --transition: all 0.3s ease;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -48,8 +59,8 @@ if (isset($_POST['login'])) {
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #007BFF 0%, #6610f2 100%);
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background-color: var(--light-gray);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -59,196 +70,149 @@ if (isset($_POST['login'])) {
         
         .login-container {
             display: flex;
-            width: 900px;
-            height: 500px;
+            width: 100%;
+            max-width: 950px;
+            height: 600px;
             background: white;
-            border-radius: 16px;
+            border-radius: var(--border-radius);
             overflow: hidden;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
         }
         
         .login-illustration {
             flex: 1;
-            background: linear-gradient(135deg, #007BFF 0%, #0056b3 100%);
+            background-color: var(--primary);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
             padding: 40px;
+            text-align: center;
         }
         
+        .illustration-icon {
+            font-size: 80px;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+
         .login-illustration h1 {
             font-size: 28px;
+            font-weight: 600;
             margin-bottom: 15px;
-            text-align: center;
         }
         
         .login-illustration p {
-            text-align: center;
             font-size: 16px;
             opacity: 0.9;
             line-height: 1.6;
-        }
-        
-        .illustration {
-            width: 200px;
-            height: 200px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 30px 0;
-            font-size: 80px;
+            max-width: 300px;
         }
         
         .login-box {
-            flex: 1;
-            padding: 50px 40px;
+            flex: 1.2;
+            padding: 50px 60px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         
-        .login-header {
-            margin-bottom: 30px;
-        }
-        
         .login-header h2 {
             font-size: 28px;
-            color: #333;
+            color: var(--text-primary);
             margin-bottom: 8px;
+            font-weight: 600;
         }
         
         .login-header p {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 15px;
+            margin-bottom: 30px;
         }
         
         .form-group {
             margin-bottom: 20px;
-            position: relative;
         }
         
         .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
-            color: #444;
+            color: #334155;
             font-size: 14px;
         }
         
         .form-group input {
             width: 100%;
             padding: 14px 16px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             font-size: 15px;
-            transition: all 0.3s;
+            transition: var(--transition);
         }
         
         .form-group input:focus {
             outline: none;
-            border-color: #007BFF;
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
         }
         
-        .form-group i {
-            position: absolute;
-            right: 15px;
-            top: 40px;
-            color: #999;
-        }
-        
-        button.login-btn {
+        .login-btn {
             width: 100%;
             padding: 14px;
-            background: #007BFF;
+            background: var(--primary);
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             color: white;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
+            transition: var(--transition);
+            margin-top: 10px;
         }
         
-        button.login-btn:hover {
-            background: #0056b3;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 123, 255, 0.3);
+        .login-btn:hover {
+            background: var(--primary-dark);
         }
         
         .error {
-            background: #ffeded;
-            color: #d93025;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            border-left: 4px solid #d93025;
-            display: flex;
-            align-items: center;
-        }
-        
-        .error i {
-            margin-right: 8px;
+            background: #ffecec; color: #dc2626; padding: 12px;
+            border-radius: 8px; margin-bottom: 20px; font-size: 14px;
+            display: flex; align-items: center; gap: 8px;
         }
         
         .register-link {
             margin-top: 25px;
             text-align: center;
             font-size: 14px;
-            color: #666;
+            color: var(--text-secondary);
         }
         
         .register-link a {
-            color: #007BFF;
+            color: var(--primary);
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.2s;
         }
         
-        .register-link a:hover {
-            text-decoration: underline;
-        }
+        .register-link a:hover { text-decoration: underline; }
         
-        /* Responsive design */
         @media (max-width: 900px) {
             .login-container {
-                flex-direction: column;
-                width: 100%;
+                flex-direction: column; width: 100%; max-width: 450px;
                 height: auto;
             }
-            
-            .login-illustration {
-                padding: 30px 20px;
-            }
-            
-            .illustration {
-                width: 120px;
-                height: 120px;
-                font-size: 50px;
-                margin: 20px 0;
-            }
-            
-            .login-box {
-                padding: 30px 25px;
-            }
+            .login-illustration { display: none; }
+            .login-box { padding: 40px 30px; }
         }
     </style>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-illustration">
-            <div class="illustration">
-                <i class="fas fa-user-lock"></i>
-            </div>
-            <h1>Welcome to CRM System</h1>
-            <p>Manage your customers, track interactions, and grow your business with our powerful CRM platform.</p>
+            <i class="fas fa-users-cog illustration-icon"></i>
+            <h1>CRM System</h1>
+            <p>Manage customers, track interactions, and grow your business.</p>
         </div>
         
         <div class="login-box">
@@ -260,28 +224,26 @@ if (isset($_POST['login'])) {
             <?php if (!empty($error)): ?>
             <div class="error">
                 <i class="fas fa-exclamation-circle"></i>
-                <?php echo $error; ?>
+                <span><?php echo $error; ?></span>
             </div>
             <?php endif; ?>
             
             <form method="POST">
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" name="email" placeholder="Enter your email" required>
-                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="email" name="email" placeholder="you@company.com" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                    <i class="fas fa-lock"></i>
                 </div>
                 
-                <button type="submit" name="login" class="login-btn">Login to Dashboard</button>
+                <button type="submit" name="login" class="login-btn">Login</button>
             </form>
             
             <div class="register-link">
-                Don't have an account? <a href="register.php">Request access here</a>
+                Don't have an account? <a href="register.php">Request Access</a>
             </div>
         </div>
     </div>

@@ -1,25 +1,49 @@
 <?php
 include 'config.php';
+include 'functions.php'; // Assuming you might have helper functions here
+
+// Initialize message variables
+$error = '';
+$success = '';
 
 if (isset($_POST['register'])) {
     $name     = $_POST['name'];
     $email    = $_POST['email'];
-    $password = password_hash($_POST['password'], PASSWORD_BCRYPT);
+    $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
 
-    // check if email already exists
-    $check = $conn->query("SELECT * FROM users WHERE email='$email'");
-    if ($check->num_rows > 0) {
-        $error = "Email already registered!";
+    // --- Validation ---
+    if ($password !== $confirm_password) {
+        $error = "Passwords do not match.";
+    } elseif (strlen($password) < 8) {
+        $error = "Password must be at least 8 characters long.";
     } else {
-        // insert with role = user
-        $sql = "INSERT INTO users (name, email, password, role) 
-                VALUES ('$name', '$email', '$password', 'user')";
+        // --- Use prepared statements to prevent SQL injection ---
         
-        if ($conn->query($sql) === TRUE) {
-            $success = "Registration successful. You can now login.";
+        // 1. Check if email already exists
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $stmt->store_result();
+        
+        if ($stmt->num_rows > 0) {
+            $error = "An account with this email already exists.";
         } else {
-            $error = "Error: " . $conn->error;
+            // 2. Insert new user
+            $hashed_password = password_hash($password, PASSWORD_BCRYPT);
+            $role = 'user'; // Default role
+            
+            $insert_stmt = $conn->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
+            $insert_stmt->bind_param("ssss", $name, $email, $hashed_password, $role);
+            
+            if ($insert_stmt->execute()) {
+                $success = "Registration successful! You can now log in.";
+            } else {
+                $error = "Error: Could not register the account.";
+            }
+            $insert_stmt->close();
         }
+        $stmt->close();
     }
 }
 ?>
@@ -28,17 +52,25 @@ if (isset($_POST['register'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Register</title>
+    <title>Create Account - CRM</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary: #4a6cf7;
+            --primary-dark: #3a5ad9;
+            --light-gray: #f3f4f6;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --border-radius: 12px;
+            --transition: all 0.3s ease;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background-color: var(--light-gray);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -48,292 +80,199 @@ if (isset($_POST['register'])) {
         
         .register-container {
             display: flex;
-            width: 900px;
-            height: 500px;
+            width: 100%;
+            max-width: 950px;
             background: white;
-            border-radius: 16px;
+            border-radius: var(--border-radius);
             overflow: hidden;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
         }
         
         .register-illustration {
             flex: 1;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background-color: var(--primary);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
             padding: 40px;
+            text-align: center;
         }
         
+        .illustration-icon {
+            font-size: 80px;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+
         .register-illustration h1 {
             font-size: 28px;
+            font-weight: 600;
             margin-bottom: 15px;
-            text-align: center;
         }
         
         .register-illustration p {
-            text-align: center;
             font-size: 16px;
             opacity: 0.9;
             line-height: 1.6;
-        }
-        
-        .illustration {
-            width: 200px;
-            height: 200px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 30px 0;
-            font-size: 80px;
+            max-width: 300px;
         }
         
         .register-box {
-            flex: 1;
-            padding: 50px 40px;
+            flex: 1.2;
+            padding: 50px 60px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         
-        .register-header {
-            margin-bottom: 30px;
-        }
-        
         .register-header h2 {
             font-size: 28px;
-            color: #333;
+            color: var(--text-primary);
             margin-bottom: 8px;
+            font-weight: 600;
         }
         
         .register-header p {
-            color: #666;
+            color: var(--text-secondary);
             font-size: 15px;
+            margin-bottom: 25px;
         }
         
         .form-group {
-            margin-bottom: 20px;
-            position: relative;
+            margin-bottom: 15px;
         }
         
         .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
-            color: #444;
+            color: #334155;
             font-size: 14px;
         }
         
         .form-group input {
             width: 100%;
-            padding: 14px 16px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             font-size: 15px;
-            transition: all 0.3s;
+            transition: var(--transition);
         }
         
         .form-group input:focus {
             outline: none;
-            border-color: #28a745;
-            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
         }
         
-        .form-group i {
-            position: absolute;
-            right: 15px;
-            top: 40px;
-            color: #999;
-        }
-        
-        button.register-btn {
+        .register-btn {
             width: 100%;
             padding: 14px;
-            background: #28a745;
+            background: var(--primary);
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             color: white;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.25);
+            transition: var(--transition);
+            margin-top: 10px;
         }
         
-        button.register-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(40, 167, 69, 0.3);
+        .register-btn:hover {
+            background: var(--primary-dark);
         }
         
-        .error {
-            background: #ffeded;
-            color: #d93025;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            border-left: 4px solid #d93025;
-            display: flex;
-            align-items: center;
+        .alert {
+            padding: 12px; border-radius: 8px; margin-bottom: 20px;
+            font-size: 14px; display: flex; align-items: center; gap: 8px;
         }
-        
-        .success {
-            background: #e6f4ea;
-            color: #137333;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            border-left: 4px solid #137333;
-            display: flex;
-            align-items: center;
-        }
-        
-        .error i, .success i {
-            margin-right: 8px;
-        }
+        .alert-error { background: #ffecec; color: #dc2626; }
+        .alert-success { background: #e6f4ea; color: #137333; }
         
         .login-link {
             margin-top: 25px;
             text-align: center;
             font-size: 14px;
-            color: #666;
+            color: var(--text-secondary);
         }
         
         .login-link a {
-            color: #28a745;
+            color: var(--primary);
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.2s;
         }
         
-        .login-link a:hover {
-            text-decoration: underline;
-        }
+        .login-link a:hover { text-decoration: underline; }
         
-        .password-requirements {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 5px;
-            font-size: 12px;
-            color: #666;
-            border-left: 3px solid #28a745;
-        }
-        
-        .password-requirements ul {
-            margin: 5px 0 0 15px;
-        }
-        
-        /* Responsive design */
         @media (max-width: 900px) {
             .register-container {
-                flex-direction: column;
-                width: 100%;
+                flex-direction: column; width: 100%; max-width: 450px;
                 height: auto;
             }
-            
-            .register-illustration {
-                padding: 30px 20px;
-            }
-            
-            .illustration {
-                width: 120px;
-                height: 120px;
-                font-size: 50px;
-                margin: 20px 0;
-            }
-            
-            .register-box {
-                padding: 30px 25px;
-            }
+            .register-illustration { display: none; }
+            .register-box { padding: 40px 30px; }
         }
     </style>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="register-container">
         <div class="register-illustration">
-            <div class="illustration">
-                <i class="fas fa-user-plus"></i>
-            </div>
-            <h1>Join Our CRM Platform</h1>
-            <p>Create an account to start managing your customers and growing your business with our powerful CRM tools.</p>
+            <i class="fas fa-rocket illustration-icon"></i>
+            <h1>Get Started</h1>
+            <p>Join our platform to streamline your workflow and boost productivity.</p>
         </div>
         
         <div class="register-box">
             <div class="register-header">
-                <h2>Create Account</h2>
-                <p>Fill in your details to get started</p>
+                <h2>Create an Account</h2>
+                <p>Fill in your details to request access</p>
             </div>
             
             <?php if (!empty($error)): ?>
-            <div class="error">
+            <div class="alert alert-error">
                 <i class="fas fa-exclamation-circle"></i>
-                <?php echo $error; ?>
+                <span><?php echo $error; ?></span>
             </div>
             <?php endif; ?>
             
             <?php if (!empty($success)): ?>
-            <div class="success">
+            <div class="alert alert-success">
                 <i class="fas fa-check-circle"></i>
-                <?php echo $success; ?>
+                <span><?php echo $success; ?></span>
             </div>
             <?php endif; ?>
             
             <form method="POST">
                 <div class="form-group">
                     <label for="name">Full Name</label>
-                    <input type="text" id="name" name="name" placeholder="Enter your full name" required>
-                    <i class="fas fa-user"></i>
+                    <input type="text" id="name" name="name" placeholder="Juan Dela Cruz" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" name="email" placeholder="Enter your email" required>
-                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="email" name="email" placeholder="you@company.com" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="Create a strong password" required>
-                    <i class="fas fa-lock"></i>
-                    <div class="password-requirements">
-                        <strong>Password should include:</strong>
-                        <ul>
-                            <li>At least 8 characters</li>
-                            <li>Uppercase and lowercase letters</li>
-                            <li>Numbers or special characters</li>
-                        </ul>
-                    </div>
+                    <input type="password" id="password" name="password" placeholder="Enter a secure password" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm_password">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="Re-enter your password" required>
                 </div>
                 
                 <button type="submit" name="register" class="register-btn">Create Account</button>
             </form>
             
             <div class="login-link">
-                Already have an account? <a href="index.php">Sign in here</a>
+                Already have an account? <a href="index.php">Sign In</a>
             </div>
         </div>
     </div>
-
-    <script>
-        // Simple password strength indicator
-        const passwordInput = document.getElementById('password');
-        const requirements = document.querySelector('.password-requirements');
-        
-        passwordInput.addEventListener('focus', function() {
-            requirements.style.display = 'block';
-        });
-        
-        passwordInput.addEventListener('blur', function() {
-            requirements.style.display = 'none';
-        });
-    </script>
 </body>
 </html>

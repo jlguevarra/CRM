@@ -14,33 +14,8 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Get report data based on filters
-$report_data = [];
-$stats = [
-    'total_customers' => 0,
-    'new_customers' => 0,
-    'tasks_completed' => 0,
-    'conversion_rate' => 0
-];
-
-// Process filters if form is submitted
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $filters = [
-        'report_type' => $_POST['report_type'] ?? 'sales',
-        'date_range' => $_POST['date_range'] ?? '30',
-        'start_date' => $_POST['start_date'] ?? '',
-        'end_date' => $_POST['end_date'] ?? ''
-    ];
-    
-    // Generate report based on filters
-    $report_data = generateReportData($filters);
-    $stats = calculateStats($report_data);
-}
-
-
 // Fetch user role from database
 $user_id = $_SESSION['user_id'];
-// Using prepared statements to prevent SQL Injection
 $stmt = $conn->prepare("SELECT role, name FROM users WHERE id = ? LIMIT 1");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
@@ -52,7 +27,6 @@ if ($result->num_rows > 0) {
     $role = $user['role'];
     $user_name = $user['name'];
 } else {
-    // User not found in database, logout
     session_destroy();
     header("Location: index.php");
     exit();
@@ -66,8 +40,6 @@ $total_users = 0;
 if ($role === 'admin') {
     $total_users = $conn->query("SELECT COUNT(*) as cnt FROM users")->fetch_assoc()['cnt'];
 }
-
-// Get tasks for the dashboard using the function from functions.php
 $tasks = getTasks();
 $open_tasks_count = 0;
 foreach ($tasks as $task) {
@@ -75,8 +47,6 @@ foreach ($tasks as $task) {
         $open_tasks_count++;
     }
 }
-
-// Get recent activities
 $recent_activities = getActivityLog($user_id, 5);
 ?>
 <!DOCTYPE html>
@@ -88,415 +58,92 @@ $recent_activities = getActivityLog($user_id, 5);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /*
-         * NOTE: All sidebar, body, and :root styles have been removed from this file.
-         * They are now located in the self-contained `sidebar.php` file.
-         * These are the styles SPECIFIC to the dashboard content.
-        */
-        :root {
-            /* These variables are still defined in sidebar.php, but can be overridden or added to here if needed */
-            --secondary: #6c757d;
-            --success: #28a745;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --light: #f8f9fa;
-            --dark: #343a40;
-            --border-radius: 12px;
-            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
         .header {
-            background: white;
-            padding: 18px 25px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            margin-bottom: 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background: white; padding: 18px 25px; border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex;
+            justify-content: space-between; align-items: center;
         }
-        
-        .header h2 {
-            margin: 0;
-            font-size: 24px;
-            color: #333;
-        }
-        
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
+        .header h2 { margin: 0; font-size: 24px; color: #333; }
+        .header-actions { display: flex; align-items: center; gap: 20px; }
+        .user-profile { display: flex; align-items: center; gap: 10px; }
         .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
+            width: 40px; height: 40px; border-radius: 50%; background: var(--primary);
+            color: white; display: flex; justify-content: center;
+            align-items: center; font-weight: bold;
         }
-        
         .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px; margin-bottom: 25px;
         }
-        
         .card {
-            background: white;
-            padding: 20px;
-            border-radius: var(--border-radius);
+            background: white; padding: 25px; border-radius: var(--border-radius);
             box-shadow: var(--box-shadow);
-            margin-top:20px;
         }
-        
         .card h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            font-size: 18px;
-            color: #444;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            margin-top: 0; margin-bottom: 20px; font-size: 18px; color: #444;
+            display: flex; justify-content: space-between; align-items: center;
         }
+        .card h3 .view-all { font-size: 13px; color: var(--primary); text-decoration: none; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; }
         
-        .card h3 .view-all {
-            font-size: 13px;
-            color: var(--primary);
-            text-decoration: none;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        
+        /* MODIFIED: Added styles for the new anchor tag */
+        a.stat-box { text-decoration: none; color: inherit; }
+
         .stat-box {
-            background: #f9fafb;
-            padding: 20px;
-            border-radius: var(--border-radius);
-            text-align: center;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
-            transition: var(--transition);
-            cursor: pointer;
+            background: #f9fafb; padding: 20px; border-radius: var(--border-radius);
+            text-align: center; transition: var(--transition);
         }
-        
-        .stat-box:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        
-        .stat-box h2 {
-            margin: 0;
-            font-size: 32px;
-            color: var(--primary);
-        }
-        
-        .stat-box p {
-            margin: 6px 0 0;
-            font-size: 14px;
-            color: #555;
-        }
-        
-        .activity-feed {
-            list-style: none;
-        }
-        
-        .activity-item {
-            display: flex;
-            gap: 15px;
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .activity-item:last-child {
-            border-bottom: none;
-        }
-        
+        .stat-box:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .stat-box h2 { margin: 0; font-size: 32px; color: var(--primary); }
+        .stat-box p { margin: 6px 0 0; font-size: 14px; color: #555; }
+        .activity-feed { list-style: none; padding: 0; }
+        .activity-item { display: flex; gap: 15px; padding: 15px 0; border-bottom: 1px solid #eee; }
+        .activity-item:last-child { border-bottom: none; }
         .activity-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: #f0f5ff;
-            color: var(--primary);
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            width: 36px; height: 36px; border-radius: 50%; background: #f0f5ff;
+            color: var(--primary); display: flex; justify-content: center; align-items: center; flex-shrink: 0;
         }
-        
-        .activity-content {
-            flex: 1;
-        }
-        
-        .activity-content p {
-            margin: 0;
-            font-size: 14px;
-        }
-        
-        .activity-time {
-            font-size: 12px;
-            color: var(--secondary);
-        }
-        
-        .task-list {
-            list-style: none;
-        }
-        
-        .task-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .task-item:last-child {
-            border-bottom: none;
-        }
-        
-        .task-checkbox {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-        
-        .task-content {
-            flex: 1;
-        }
-        
-        .task-title {
-            font-size: 14px;
-            margin-bottom: 4px;
-        }
-        
-        .task-meta {
-            display: flex;
-            gap: 10px;
-            font-size: 12px;
-            color: var(--secondary);
-        }
-        
-        .task-priority {
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-        }
-        
-        .priority-high {
-            background: #ffecec;
-            color: var(--danger);
-        }
-        
-        .priority-medium {
-            background: #fff4e6;
-            color: var(--warning);
-        }
-        
-        .priority-low {
-            background: #e6f4ff;
-            color: var(--primary);
-        }
-        
-        .chart-container {
-            position: relative;
-            height: 250px;
-            width: 100%;
-        }
-        
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-        }
-        
-        .action-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
-            background: #f9fafb;
-            border-radius: var(--border-radius);
-            text-align: center;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        
-        .action-btn:hover {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .action-btn i {
-            font-size: 20px;
-            margin-bottom: 8px;
-        }
-        
-        .action-btn span {
-            font-size: 13px;
-        }
-        
-        @media (max-width: 992px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
-            }
-            .header-actions {
-                width: 100%;
-                justify-content: space-between;
-            }
-            .stats {
-                grid-template-columns: 1fr;
-            }
-        }
-        
+        .activity-content p { margin: 0 0 4px 0; font-size: 14px; }
+        .activity-time { font-size: 12px; color: var(--secondary); }
+        .task-list { list-style: none; padding: 0; }
+        .task-item { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .task-item:last-child { border-bottom: none; }
+        .task-checkbox { width: 18px; height: 18px; cursor: pointer; }
+        .task-title { font-size: 14px; margin-bottom: 4px; }
+        .task-meta { display: flex; gap: 10px; font-size: 12px; color: var(--secondary); }
+        .task-priority { padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+        .priority-high { background: #ffecec; color: var(--danger); }
+        .priority-medium { background: #fff4e6; color: var(--warning); }
+        .priority-low { background: #e6f4ff; color: var(--primary); }
+        .status-completed { color: var(--success); }
+        .chart-container { position: relative; height: 250px; width: 100%; }
         .toggle-sidebar {
-            display: none;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            margin-bottom: 15px;
+             display: none; background: var(--primary); color: white; border: none;
+             border-radius: 4px; padding: 8px 12px; cursor: pointer; margin-bottom: 15px;
         }
-        
         @media (max-width: 992px) {
-            .toggle-sidebar {
-                display: block;
-            }
+            .toggle-sidebar { display: block; }
         }
-        
-        .status-pending {
-            background: #fff4e6;
-            color: #f39c12;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-        }
-        
-        .status-in-progress {
-            background: #e6f4ff;
-            color: #3498db;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-        }
-        
-        .status-completed {
-            background: #e6f4e6;
-            color: #27ae60;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-        }
-        .notification {
-            position: relative;
-            cursor: pointer;
-        }
-
+        .notification { position: relative; cursor: pointer; }
         .notification .badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #ff4757;
-            color: white;
-            border-radius: 50%;
-            padding: 2px 6px;
-            font-size: 12px;
-            min-width: 18px;
-            text-align: center;
-            display: none; /* Initially hidden */
+            position: absolute; top: -8px; right: -8px; background: #ff4757; color: white;
+            border-radius: 50%; width: 18px; height: 18px; font-size: 11px;
+            display: flex; justify-content: center; align-items: center;
         }
-
         .notification-dropdown {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            width: 300px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-height: 400px;
-            overflow-y: auto;
-            display: none;
-            z-index: 1000;
+            position: absolute; top: 100%; right: 0; width: 300px; background: white;
+            border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-height: 400px; overflow-y: auto; display: none; z-index: 1000;
         }
-
-        .notification-dropdown.active {
-            display: block;
-        }
-
-        .notification-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #f0f0f0;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .notification-item:hover {
-            background: #f8f9fa;
-        }
-
-        .notification-item.unread {
-            background: #f8f9fa;
-            border-left: 3px solid #4a6cf7;
-        }
-
-        .notification-item.read {
-            opacity: 0.7;
-        }
-
-        .notification-title {
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: #333;
-        }
-
-        .notification-message {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-
-        .notification-time {
-            font-size: 12px;
-            color: #999;
-        }
-
-        .notification-empty {
-            padding: 20px;
-            text-align: center;
-            color: #999;
-        }
+        .notification-dropdown.active { display: block; }
+        .notification-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s; }
+        .notification-item:hover { background: #f8f9fa; }
+        .notification-item.unread { background: #f8f9fa; border-left: 3px solid var(--primary); }
+        .notification-item.read { opacity: 0.7; }
+        .notification-title { font-weight: 600; margin-bottom: 4px; color: #333; }
+        .notification-message { font-size: 14px; color: #666; margin-bottom: 4px; }
+        .notification-time { font-size: 12px; color: #999; }
+        .notification-empty { padding: 20px; text-align: center; color: #999; }
     </style>
 </head>
 <body>
@@ -530,20 +177,22 @@ $recent_activities = getActivityLog($user_id, 5);
         <div class="card">
             <h3>Quick Stats</h3>
             <div class="stats">
-                <div class="stat-box">
+                <a href="customers.php" class="stat-box">
                     <h2><?php echo $total_customers; ?></h2>
                     <p>Total Customers</p>
-                </div>
+                </a>
+
                 <?php if ($role === 'admin') : ?>
-                <div class="stat-box">
+                <a href="users.php" class="stat-box">
                     <h2><?php echo $total_users; ?></h2>
                     <p>Total Users</p>
-                </div>
+                </a>
                 <?php endif; ?>
-                <div class="stat-box">
+
+                <a href="task.php" class="stat-box">
                     <h2><?php echo $open_tasks_count; ?></h2>
                     <p>Open Tasks</p>
-                </div>
+                </a>
             </div>
         </div>
 
@@ -586,14 +235,10 @@ $recent_activities = getActivityLog($user_id, 5);
                         <?php endforeach; ?>
                     <?php else : ?>
                         <li class="activity-item">
-                            <div class="activity-icon">
-                                <i class="fas fa-info-circle"></i>
-                            </div>
+                            <div class="activity-icon"><i class="fas fa-info-circle"></i></div>
                             <div class="activity-content">
                                 <p>No recent activity found</p>
-                                <div class="activity-time">
-                                    Activities will appear here as you use the system
-                                </div>
+                                <div class="activity-time">Activities will appear here as you use the system</div>
                             </div>
                         </li>
                     <?php endif; ?>
@@ -601,244 +246,110 @@ $recent_activities = getActivityLog($user_id, 5);
             </div>
         </div>
         
-        <div class="dashboard-grid">
-            <div class="card">
-                <h3>
-                    <?php 
-                    if ($role === 'admin') {
-                        echo 'All Team Tasks';
-                    } else {
-                        echo 'My Assigned Tasks';
-                    }
-                    ?> 
-                    <a href="task.php" class="view-all">View All</a>
-                </h3>
-                <ul class="task-list">
-                    <?php if (!empty($tasks)) : ?>
-                        <?php $displayed_tasks = 0; ?>
-                        <?php foreach ($tasks as $task) : ?>
-                            <?php if ($displayed_tasks < 3) : ?>
-                                <li class="task-item">
-                                    <input type="checkbox" class="task-checkbox" 
-                                        <?php echo $task['status'] == 'completed' ? 'checked' : ''; ?> 
-                                        onchange="updateTaskStatus(<?php echo $task['id']; ?>, this.checked ? 'completed' : 'pending')">
-                                    <div class="task-content">
-                                        <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
-                                        <div class="task-meta">
-                                            <div>Due: <?php echo $task['due_date'] ? date('M j, Y', strtotime($task['due_date'])) : 'No due date'; ?></div>
-                                            <div class="task-priority priority-<?php echo $task['priority']; ?>">
-                                                <?php echo ucfirst($task['priority']); ?>
-                                            </div>
-                                            <div class="status-<?php echo $task['status']; ?>">
-                                                <?php echo ucfirst(str_replace('-', ' ', $task['status'])); ?>
-                                            </div>
-                                            <?php if ($role === 'admin') : ?>
-                                                <div class="task-assignee">
-                                                    <small>Assigned to: <?php echo htmlspecialchars($task['assigned_name']); ?></small>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </li>
-                                <?php $displayed_tasks++; ?>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    <?php else : ?>
+        <div class="card">
+            <h3>
+                <?php echo ($role === 'admin') ? 'All Team Tasks' : 'My Assigned Tasks'; ?> 
+                <a href="task.php" class="view-all">View All</a>
+            </h3>
+            <ul class="task-list">
+                <?php if (!empty($tasks)) : $displayed_tasks = 0; ?>
+                    <?php foreach ($tasks as $task) : if ($displayed_tasks < 3) : ?>
                         <li class="task-item">
+                            <input type="checkbox" class="task-checkbox" <?php echo $task['status'] == 'completed' ? 'checked' : ''; ?>>
                             <div class="task-content">
-                                <div class="task-title">No tasks found</div>
+                                <div class="task-title" style="<?php echo $task['status'] == 'completed' ? 'text-decoration: line-through; opacity: 0.6;' : ''; ?>">
+                                    <?php echo htmlspecialchars($task['title']); ?>
+                                </div>
                                 <div class="task-meta">
-                                    <div>
-                                        <?php 
-                                        if ($role === 'admin') {
-                                            echo 'No tasks created yet';
-                                        } else {
-                                            echo 'No tasks assigned to you yet';
-                                        }
-                                        ?>
-                                    </div>
+                                    <div>Due: <?php echo date('M j, Y', strtotime($task['due_date'])); ?></div>
+                                    <div class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></div>
+                                    <?php if ($role === 'admin') : ?>
+                                        <div class="task-assignee"><small>To: <?php echo htmlspecialchars($task['assigned_name']); ?></small></div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </li>
-                    <?php endif; ?>
-                </ul>
-            </div>
+                    <?php $displayed_tasks++; endif; endforeach; ?>
+                <?php else : ?>
+                    <li class="task-item">
+                        <div class="task-content"><div class="task-title">No tasks found</div></div>
+                    </li>
+                <?php endif; ?>
+            </ul>
         </div>
     </div>
 
-
     <script>
     // Toggle sidebar on mobile
-    document.getElementById('toggleSidebar').addEventListener('click', function () {
-        document.querySelector('.sidebar').classList.toggle('active');
-    });
+    document.getElementById('toggleSidebar').addEventListener('click', () => document.querySelector('.sidebar').classList.toggle('active'));
 
     // Customer acquisition chart
     const acquisitionCtx = document.getElementById('acquisitionChart').getContext('2d');
     const acquisitionChart = new Chart(acquisitionCtx, {
-        type: 'line',
-        data: {
+        type: 'line', data: {
             labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
             datasets: [{
-                label: 'New Customers',
-                data: [12, 19, 15, 17, 22, 25, 28, 24, 30, 35],
-                backgroundColor: 'rgba(74, 108, 247, 0.1)',
-                borderColor: '#4a6cf7',
-                borderWidth: 2,
-                tension: 0.3,
-                fill: true
+                label: 'New Customers', data: [12, 19, 15, 17, 22, 25, 28, 24, 30, 35],
+                backgroundColor: 'rgba(74, 108, 247, 0.1)', borderColor: '#4a6cf7',
+                borderWidth: 2, tension: 0.3, fill: true
             }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        drawBorder: false
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            }
+        }, options: {
+            responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, grid: { drawBorder: false } }, x: { grid: { display: false } } }
         }
     });
 
-    // Task checkboxes
-    document.querySelectorAll('.task-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', function () {
-            let taskItem = this.closest('.task-item');
-            if (this.checked) {
-                taskItem.style.opacity = '0.6';
-                taskItem.querySelector('.task-title').style.textDecoration = 'line-through';
-            } else {
-                taskItem.style.opacity = '1';
-                taskItem.querySelector('.task-title').style.textDecoration = 'none';
-            }
-        });
-    });
-
-
-    // Function to update task status
-    function updateTaskStatus(taskId, status) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = 'update_task_status.php';
-
-        const taskIdInput = document.createElement('input');
-        taskIdInput.type = 'hidden';
-        taskIdInput.name = 'task_id';
-        taskIdInput.value = taskId;
-        form.appendChild(taskIdInput);
-
-        const statusInput = document.createElement('input');
-        statusInput.type = 'hidden';
-        statusInput.name = 'status';
-        statusInput.value = status;
-        form.appendChild(statusInput);
-
-        document.body.appendChild(form);
-        form.submit();
-    }
-    // Load notifications and handle interactions
+    // --- NOTIFICATION JAVASCRIPT --- //
     function loadNotifications() {
         fetch('notifications.php')
             .then(res => res.json())
             .then(data => {
                 const badge = document.getElementById('notificationCount');
                 const dropdown = document.getElementById('notificationDropdown');
-
                 badge.textContent = data.count;
-                // Use 'flex' for display to match CSS for centering
                 badge.style.display = data.count > 0 ? 'flex' : 'none';
-
                 dropdown.innerHTML = '';
-                
                 if (data.notifications && data.notifications.length > 0) {
                     data.notifications.forEach(notification => {
                         const item = document.createElement('div');
                         item.className = `notification-item ${notification.is_read == 0 ? 'unread' : 'read'}`;
-                        item.innerHTML = `
-                            <div class="notification-title">${notification.title}</div>
-                            <div class="notification-message">${notification.message}</div>
-                            <div class="notification-time">${formatTime(notification.created_at)}</div>
-                        `;
+                        item.innerHTML = `<div class="notification-title">${notification.title}</div><div class="notification-message">${notification.message}</div><div class="notification-time">${formatTime(notification.created_at)}</div>`;
                         item.onclick = () => {
                             markNotificationAsRead(notification.id);
-                            if (notification.related_type === 'task') {
-                                window.location.href = 'task.php';
-                            }
+                            if (notification.related_type === 'task') { window.location.href = 'task.php'; }
                         };
                         dropdown.appendChild(item);
                     });
                 } else {
                     dropdown.innerHTML = '<div class="notification-empty">No notifications</div>';
                 }
-            })
-            .catch(error => console.error('Error loading notifications:', error));
+            }).catch(error => console.error('Error:', error));
     }
-
-    // Format time function
     function formatTime(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        
+        const date = new Date(dateString); const now = new Date();
+        const diffMs = now - date; const diffMins = Math.floor(diffMs / 60000);
+        if (diffMins < 1) return 'Just now'; if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHours = Math.floor(diffMs / 3600000); if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffMs / 86400000); if (diffDays < 7) return `${diffDays}d ago`;
         return date.toLocaleDateString();
     }
-
-    // Mark notification as read
     function markNotificationAsRead(notificationId) {
         fetch('mark_notification_read.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: `id=${notificationId}`
-        })
-        .then(() => loadNotifications())
-        .catch(error => console.error('Error marking notification as read:', error));
+        }).then(() => loadNotifications());
     }
-
-    // Toggle notification dropdown
-    document.getElementById('notificationBell').addEventListener('click', function(e) {
-        e.stopPropagation();
-        const dropdown = document.getElementById('notificationDropdown');
-        dropdown.classList.toggle('active');
-        
-        if (dropdown.classList.contains('active')) {
-            fetch('mark_read.php', { method: 'POST' });
-        }
+    document.getElementById('notificationBell').addEventListener('click', e => {
+        e.stopPropagation(); document.getElementById('notificationDropdown').classList.toggle('active');
     });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', e => {
         if (!e.target.closest('.notification')) {
             document.getElementById('notificationDropdown').classList.remove('active');
         }
     });
-
-    // Load notifications on page load and refresh every 30 seconds
     document.addEventListener('DOMContentLoaded', () => {
-        loadNotifications();
-        setInterval(loadNotifications, 30000);
+        loadNotifications(); setInterval(loadNotifications, 30000);
     });
-
-</script>
+    </script>
 </body>
 </html>

@@ -17,62 +17,85 @@ $user_name = $user['name'];
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
     // Create Task
     if (isset($_POST['create_task'])) {
         $task_data = [
-            'title' => $_POST['title'], 'description' => $_POST['description'],
-            'due_date' => $_POST['due_date'], 'priority' => $_POST['priority'],
-            'status' => $_POST['status'], 'assigned_to' => $_POST['assigned_to'],
+            'title' => $_POST['title'],
+            'description' => $_POST['description'],
+            'due_date' => $_POST['due_date'],
+            'priority' => $_POST['priority'],
+            'status' => 'pending', // MODIFIED: Status is always 'pending' on creation
+            'assigned_to' => $_POST['assigned_to'],
             'created_by' => $user_id
         ];
         if (createTask($task_data)) {
-            $success_message = "Task created successfully!";
+            $success_message = "Task created and assigned successfully!";
         } else {
             $error_message = "Failed to create task.";
         }
+        // Set a session flash message to show after redirect
+        $_SESSION['flash_message'] = $success_message ?? $error_message;
+        header("Location: task.php");
+        exit();
     }
 
-    // Update Task
+    // Update Task (Admin Edit)
     if (isset($_POST['update_task'])) {
         $task_data = [
             'task_id' => $_POST['task_id'], 'title' => $_POST['title'],
             'description' => $_POST['description'], 'due_date' => $_POST['due_date'],
-            'priority' => $_POST['priority'], 'status' => $_POST['status'],
+            'priority' => $_POST['priority'], 'status' => $_POST['status'], // Admin can still change status here
             'assigned_to' => $_POST['assigned_to']
         ];
         if (updateTask($task_data)) {
-            $success_message = "Task updated successfully!";
+            $_SESSION['flash_message'] = "Task updated successfully!";
         } else {
-            $error_message = "Failed to update task.";
+            $_SESSION['flash_message'] = "Failed to update task.";
         }
+        header("Location: task.php");
+        exit();
     }
 
     // Delete Task
     if (isset($_POST['delete_task'])) {
         if (deleteTask($_POST['task_id'])) {
-            $success_message = "Task deleted successfully!";
+            $_SESSION['flash_message'] = "Task deleted successfully!";
         } else {
-            $error_message = "Failed to delete task.";
+            $_SESSION['flash_message'] = "Failed to delete task.";
         }
+        header("Location: task.php");
+        exit();
     }
 
-    // Update Task Status from checkbox
+    // Update Task Status (from user or admin checkbox)
     if (isset($_POST['update_task_status'])) {
-        updateTaskStatus($_POST['task_id'] ?? 0, $_POST['status'] ?? 'pending');
+        $task_id = $_POST['task_id'] ?? 0;
+        $status = $_POST['status'] ?? 'pending';
+        if (updateTaskStatus($task_id, $status)) {
+            $_SESSION['flash_message'] = "Task status updated!";
+        }
+        header("Location: task.php");
+        exit();
     }
-    header("Location: task.php"); // Redirect to avoid form resubmission
-    exit();
 }
 
-// Get tasks based on role
-$tasks = getTasks(); 
+// Display flash message if it exists
+if (isset($_SESSION['flash_message'])) {
+    $flash_message = $_SESSION['flash_message'];
+    unset($_SESSION['flash_message']);
+}
 
-// Get users for assignment dropdown
-$users = [];
-$user_result = $conn->query("SELECT id, name FROM users ORDER BY name ASC");
+
+// Get tasks based on role
+$tasks = getTasks();
+
+// Get users with 'user' role for assignment dropdown
+$assignable_users = [];
+$user_result = $conn->query("SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC");
 if ($user_result->num_rows > 0) {
     while ($row = $user_result->fetch_assoc()) {
-        $users[] = $row;
+        $assignable_users[] = $row;
     }
 }
 ?>
@@ -131,7 +154,8 @@ if ($user_result->num_rows > 0) {
         .status-in-progress { background-color: #e0f2fe; color: #0284c7; }
         .status-completed { background-color: #dcfce7; color: #16a34a; }
         .task-actions { display: flex; gap: 10px; }
-        .task-actions button { background: none; border: none; color: #999; cursor: pointer; font-size: 16px; }
+        .task-actions button, .task-actions .btn { background: none; border: none; color: #999; cursor: pointer; font-size: 14px; padding: 5px; }
+        .task-actions .btn { background: #f1f5f9; color: #333; border-radius: 6px; }
         
         .empty-state { text-align: center; padding: 50px; color: #999; }
         .empty-state i { font-size: 40px; margin-bottom: 15px; }
@@ -201,11 +225,8 @@ if ($user_result->num_rows > 0) {
             </div>
         </div>
         
-        <?php if (isset($success_message)): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $success_message; ?></div>
-        <?php endif; ?>
-        <?php if (isset($error_message)): ?>
-        <div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $error_message; ?></div>
+        <?php if (isset($flash_message)): ?>
+        <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $flash_message; ?></div>
         <?php endif; ?>
         
         <div class="card">
@@ -240,13 +261,15 @@ if ($user_result->num_rows > 0) {
             <ul class="task-list" id="taskList">
                 <?php if (!empty($tasks)): foreach ($tasks as $task): ?>
                 <li class="task-item" data-id="<?php echo $task['id']; ?>">
-                    <form method="POST" class="task-status-form">
-                        <input type="hidden" name="update_task_status" value="1">
-                        <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                        <input type="hidden" name="status" value="<?php echo $task['status']; ?>">
-                        <input type="checkbox" class="task-checkbox" <?php echo $task['status'] === 'completed' ? 'checked' : ''; ?> 
-                                onchange="this.previousElementSibling.value = this.checked ? 'completed' : 'pending'; this.form.submit()">
-                    </form>
+                    <?php if ($role === 'admin'): // Admin sees checkbox for quick completion ?>
+                        <form method="POST" class="task-status-form">
+                            <input type="hidden" name="update_task_status" value="1">
+                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                            <input type="checkbox" class="task-checkbox" <?php echo $task['status'] === 'completed' ? 'checked' : ''; ?> 
+                                    onchange="this.form.submit()">
+                        </form>
+                    <?php endif; ?>
+
                     <div class="task-content">
                         <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
                         <div class="task-description"><?php echo htmlspecialchars($task['description'] ?? ''); ?></div>
@@ -254,13 +277,30 @@ if ($user_result->num_rows > 0) {
                             <div><i class="fas fa-calendar-alt"></i> <span class="due-date"><?php echo date("M j, Y", strtotime($task['due_date'])); ?></span></div>
                             <div class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></div>
                             <div class="task-status status-<?php echo $task['status']; ?>"><?php echo ucfirst(str_replace('-', ' ', $task['status'])); ?></div>
+                            <?php if ($role === 'admin'): ?>
                             <div><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['assigned_name']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="task-actions">
+                         <?php if ($role === 'user' && $task['status'] !== 'completed'): ?>
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="update_task_status" value="1">
+                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                <input type="hidden" name="status" value="in-progress">
+                                <button type="submit" class="btn">Start Task</button>
+                            </form>
+                             <form method="POST" style="display:inline;">
+                                <input type="hidden" name="update_task_status" value="1">
+                                <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                                <input type="hidden" name="status" value="completed">
+                                <button type="submit" class="btn">Complete</button>
+                            </form>
+                        <?php endif; ?>
+                        
                         <?php if ($role === 'admin' || $task['created_by'] == $user_id) : ?>
                             <button title="Edit" onclick="editTask(this)" data-task='<?= htmlspecialchars(json_encode($task), ENT_QUOTES, 'UTF-8') ?>'><i class="fas fa-edit"></i></button>
-                            <form method="POST" onsubmit="return confirm('Delete this task?');">
+                            <form method="POST" onsubmit="return confirm('Delete this task?');" style="display:inline;">
                                 <input type="hidden" name="delete_task" value="1">
                                 <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                                 <button type="submit" title="Delete"><i class="fas fa-trash"></i></button>
@@ -307,19 +347,19 @@ if ($user_result->num_rows > 0) {
                         <option value="high">High</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="status-group">
                     <label for="taskStatus">Status *</label>
                     <select id="taskStatus" name="status" required>
-                        <option value="pending" selected>Pending</option>
+                        <option value="pending">Pending</option>
                         <option value="in-progress">In Progress</option>
                         <option value="completed">Completed</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="taskAssignedTo">Assign To *</label>
+                    <label for="taskAssignedTo">Assign To (User Only) *</label>
                     <select id="taskAssignedTo" name="assigned_to" required>
                         <option value="">Select a user</option>
-                        <?php foreach ($users as $u): ?>
+                        <?php foreach ($assignable_users as $u): ?>
                         <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['name']); ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -333,7 +373,6 @@ if ($user_result->num_rows > 0) {
     </div>
 
     <script>
-        // Modal and Form Handling
         const addTaskBtn = document.getElementById('addTaskBtn');
         const taskModal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');
@@ -341,7 +380,8 @@ if ($user_result->num_rows > 0) {
         const formAction = document.getElementById('formAction');
         const cancelBtn = document.getElementById('cancelTask');
         const closeModalBtn = taskModal.querySelector('.close');
-        
+        const statusGroup = document.getElementById('status-group');
+
         function openModal() { taskModal.style.display = 'flex'; }
         function closeModal() { taskModal.style.display = 'none'; }
 
@@ -351,6 +391,7 @@ if ($user_result->num_rows > 0) {
                 taskForm.reset();
                 formAction.name = 'create_task';
                 document.getElementById('taskId').value = '';
+                statusGroup.style.display = 'none'; // Hide status on create
                 openModal();
             });
         }
@@ -360,6 +401,7 @@ if ($user_result->num_rows > 0) {
             modalTitle.textContent = 'Edit Task';
             taskForm.reset();
             formAction.name = 'update_task';
+            statusGroup.style.display = 'block'; // Show status on edit
             document.getElementById('taskId').value = task.id;
             document.getElementById('taskTitle').value = task.title;
             document.getElementById('taskDescription').value = task.description;
@@ -374,7 +416,6 @@ if ($user_result->num_rows > 0) {
         closeModalBtn.addEventListener('click', closeModal);
         window.addEventListener('click', (e) => { if (e.target === taskModal) closeModal(); });
 
-        // Filter Functionality
         const statusFilter = document.getElementById('statusFilter');
         const priorityFilter = document.getElementById('priorityFilter');
         
