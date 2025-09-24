@@ -1,26 +1,19 @@
 <?php
-// Start session at the very top with output buffering
 ob_start();
 session_start();
-
-// Include configuration and functions
 include 'config.php';
 include 'functions.php';
 
-
-// Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
 }
 
-// Fetch user role from database
 $user_id = $_SESSION['user_id'];
 $stmt = $conn->prepare("SELECT role, name FROM users WHERE id = ? LIMIT 1");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
-
 
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
@@ -33,8 +26,6 @@ if ($result->num_rows > 0) {
 }
 $stmt->close();
 
-
-// Fetch Stats
 $total_customers = $conn->query("SELECT COUNT(*) as cnt FROM customers")->fetch_assoc()['cnt'];
 $total_users = 0;
 if ($role === 'admin') {
@@ -85,10 +76,7 @@ $recent_activities = getActivityLog($user_id, 5);
         }
         .card h3 .view-all { font-size: 13px; color: var(--primary); text-decoration: none; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; }
-        
-        /* MODIFIED: Added styles for the new anchor tag */
         a.stat-box { text-decoration: none; color: inherit; }
-
         .stat-box {
             background: #f9fafb; padding: 20px; border-radius: var(--border-radius);
             text-align: center; transition: var(--transition);
@@ -115,23 +103,17 @@ $recent_activities = getActivityLog($user_id, 5);
         .priority-high { background: #ffecec; color: var(--danger); }
         .priority-medium { background: #fff4e6; color: var(--warning); }
         .priority-low { background: #e6f4ff; color: var(--primary); }
-        .status-completed { color: var(--success); }
         .chart-container { position: relative; height: 250px; width: 100%; }
-        .toggle-sidebar {
-             display: none; background: var(--primary); color: white; border: none;
-             border-radius: 4px; padding: 8px 12px; cursor: pointer; margin-bottom: 15px;
-        }
-        @media (max-width: 992px) {
-            .toggle-sidebar { display: block; }
-        }
+        
+        /* Notification Styles */
         .notification { position: relative; cursor: pointer; }
         .notification .badge {
-            position: absolute; top: -8px; right: -8px; background: #ff4757; color: white;
+            position: absolute; top: -8px; right: -8px; background: var(--danger); color: white;
             border-radius: 50%; width: 18px; height: 18px; font-size: 11px;
             display: flex; justify-content: center; align-items: center;
         }
         .notification-dropdown {
-            position: absolute; top: 100%; right: 0; width: 300px; background: white;
+            position: absolute; top: 100%; right: 0; width: 320px; background: white;
             border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             max-height: 400px; overflow-y: auto; display: none; z-index: 1000;
         }
@@ -139,21 +121,24 @@ $recent_activities = getActivityLog($user_id, 5);
         .notification-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.2s; }
         .notification-item:hover { background: #f8f9fa; }
         .notification-item.unread { background: #f8f9fa; border-left: 3px solid var(--primary); }
-        .notification-item.read { opacity: 0.7; }
         .notification-title { font-weight: 600; margin-bottom: 4px; color: #333; }
         .notification-message { font-size: 14px; color: #666; margin-bottom: 4px; }
         .notification-time { font-size: 12px; color: #999; }
         .notification-empty { padding: 20px; text-align: center; color: #999; }
+        
+        /* --- STYLES FOR NEW BUTTON --- */
+        .notification-footer { padding: 8px; text-align: center; border-top: 1px solid #f0f0f0; }
+        .mark-all-read-btn {
+            background: none; border: none; color: var(--primary); font-weight: 500;
+            cursor: pointer; font-size: 13px; padding: 5px;
+        }
+        .mark-all-read-btn:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <?php include 'sidebar.php'; ?>
 
     <div class="main-content">
-        <button class="toggle-sidebar" id="toggleSidebar">
-            <i class="fas fa-bars"></i>
-        </button>
-        
         <div class="header">
             <h2>Welcome, <?php echo htmlspecialchars($user_name); ?> 👋</h2>
             <div class="header-actions">
@@ -181,14 +166,12 @@ $recent_activities = getActivityLog($user_id, 5);
                     <h2><?php echo $total_customers; ?></h2>
                     <p>Total Customers</p>
                 </a>
-
                 <?php if ($role === 'admin') : ?>
                 <a href="users.php" class="stat-box">
                     <h2><?php echo $total_users; ?></h2>
                     <p>Total Users</p>
                 </a>
                 <?php endif; ?>
-
                 <a href="task.php" class="stat-box">
                     <h2><?php echo $open_tasks_count; ?></h2>
                     <p>Open Tasks</p>
@@ -197,134 +180,108 @@ $recent_activities = getActivityLog($user_id, 5);
         </div>
 
         <div class="dashboard-grid">
-            <div class="card">
+             <div class="card">
                 <h3>Customer Acquisition <a href="#" class="view-all">View Report</a></h3>
                 <div class="chart-container">
                     <canvas id="acquisitionChart"></canvas>
                 </div>
             </div>
-            
            <div class="card">
                 <h3>Recent Activity <a href="#" class="view-all">View All</a></h3>
                 <ul class="activity-feed">
                     <?php if (!empty($recent_activities)) : ?>
                         <?php foreach ($recent_activities as $activity) : ?>
                             <li class="activity-item">
-                                <div class="activity-icon">
-                                    <?php
-                                    $icon = 'fa-history'; // default
-                                    switch($activity['activity_type']) {
-                                        case 'login': $icon = 'fa-sign-in-alt'; break;
-                                        case 'task_create': $icon = 'fa-tasks'; break;
-                                        case 'task_complete': $icon = 'fa-check-circle'; break;
-                                        case 'customer_add': $icon = 'fa-user-plus'; break;
-                                        case 'customer_update': $icon = 'fa-user-edit'; break;
-                                        case 'report_generate': $icon = 'fa-chart-bar'; break;
-                                        case 'schedule': $icon = 'fa-calendar'; break;
-                                    }
-                                    ?>
-                                    <i class="fas <?php echo $icon; ?>"></i>
-                                </div>
+                                <div class="activity-icon"><i class="fas fa-history"></i></div>
                                 <div class="activity-content">
                                     <p><?php echo htmlspecialchars($activity['formatted_description'] ?? $activity['description']); ?></p>
-                                    <div class="activity-time">
-                                        <?php echo date('M j, Y g:i A', strtotime($activity['created_at'])); ?>
-                                    </div>
+                                    <div class="activity-time"><?php echo date('M j, Y g:i A', strtotime($activity['created_at'])); ?></div>
                                 </div>
                             </li>
                         <?php endforeach; ?>
                     <?php else : ?>
-                        <li class="activity-item">
+                         <li class="activity-item">
                             <div class="activity-icon"><i class="fas fa-info-circle"></i></div>
-                            <div class="activity-content">
-                                <p>No recent activity found</p>
-                                <div class="activity-time">Activities will appear here as you use the system</div>
-                            </div>
+                            <div class="activity-content"><p>No recent activity found</p></div>
                         </li>
                     <?php endif; ?>
                 </ul>
             </div>
         </div>
-        
-        <div class="card">
-            <h3>
-                <?php echo ($role === 'admin') ? 'All Team Tasks' : 'My Assigned Tasks'; ?> 
-                <a href="task.php" class="view-all">View All</a>
-            </h3>
-            <ul class="task-list">
-                <?php if (!empty($tasks)) : $displayed_tasks = 0; ?>
-                    <?php foreach ($tasks as $task) : if ($displayed_tasks < 3) : ?>
-                        <li class="task-item">
-                            <input type="checkbox" class="task-checkbox" <?php echo $task['status'] == 'completed' ? 'checked' : ''; ?>>
-                            <div class="task-content">
-                                <div class="task-title" style="<?php echo $task['status'] == 'completed' ? 'text-decoration: line-through; opacity: 0.6;' : ''; ?>">
-                                    <?php echo htmlspecialchars($task['title']); ?>
-                                </div>
-                                <div class="task-meta">
-                                    <div>Due: <?php echo date('M j, Y', strtotime($task['due_date'])); ?></div>
-                                    <div class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></div>
-                                    <?php if ($role === 'admin') : ?>
-                                        <div class="task-assignee"><small>To: <?php echo htmlspecialchars($task['assigned_name']); ?></small></div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </li>
-                    <?php $displayed_tasks++; endif; endforeach; ?>
-                <?php else : ?>
-                    <li class="task-item">
-                        <div class="task-content"><div class="task-title">No tasks found</div></div>
-                    </li>
-                <?php endif; ?>
-            </ul>
-        </div>
+
     </div>
 
     <script>
-    // Toggle sidebar on mobile
-    document.getElementById('toggleSidebar').addEventListener('click', () => document.querySelector('.sidebar').classList.toggle('active'));
-
-    // Customer acquisition chart
+    // Chart.js setup
     const acquisitionCtx = document.getElementById('acquisitionChart').getContext('2d');
-    const acquisitionChart = new Chart(acquisitionCtx, {
+    new Chart(acquisitionCtx, {
         type: 'line', data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
             datasets: [{
-                label: 'New Customers', data: [12, 19, 15, 17, 22, 25, 28, 24, 30, 35],
+                label: 'New Customers', data: [12, 19, 15, 17, 22, 25, 28],
                 backgroundColor: 'rgba(74, 108, 247, 0.1)', borderColor: '#4a6cf7',
                 borderWidth: 2, tension: 0.3, fill: true
             }]
-        }, options: {
-            responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, grid: { drawBorder: false } }, x: { grid: { display: false } } }
-        }
+        }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
 
     // --- NOTIFICATION JAVASCRIPT --- //
+    const notificationBell = document.getElementById('notificationBell');
+    const notificationDropdown = document.getElementById('notificationDropdown');
+    
+    // --- NEW FUNCTION ---
+    function markAllAsRead() {
+        fetch('mark_all_read.php', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                loadNotifications(); // Refresh the list
+            }
+        })
+        .catch(error => console.error('Error marking all as read:', error));
+    }
+
     function loadNotifications() {
         fetch('notifications.php')
             .then(res => res.json())
             .then(data => {
                 const badge = document.getElementById('notificationCount');
-                const dropdown = document.getElementById('notificationDropdown');
                 badge.textContent = data.count;
                 badge.style.display = data.count > 0 ? 'flex' : 'none';
-                dropdown.innerHTML = '';
+                notificationDropdown.innerHTML = '';
+                
                 if (data.notifications && data.notifications.length > 0) {
                     data.notifications.forEach(notification => {
                         const item = document.createElement('div');
                         item.className = `notification-item ${notification.is_read == 0 ? 'unread' : 'read'}`;
                         item.innerHTML = `<div class="notification-title">${notification.title}</div><div class="notification-message">${notification.message}</div><div class="notification-time">${formatTime(notification.created_at)}</div>`;
                         item.onclick = () => {
-                            markNotificationAsRead(notification.id);
+                            // You would need a mark_one_read.php script for this part
                             if (notification.related_type === 'task') { window.location.href = 'task.php'; }
                         };
-                        dropdown.appendChild(item);
+                        notificationDropdown.appendChild(item);
                     });
+
+                    // --- MODIFIED: Add the footer with the button if there are unread notifications ---
+                    if (data.count > 0) {
+                        const footer = document.createElement('div');
+                        footer.className = 'notification-footer';
+                        footer.innerHTML = `<button class="mark-all-read-btn">Mark all as read</button>`;
+                        notificationDropdown.appendChild(footer);
+                        
+                        // Attach event listener to the new button
+                        footer.querySelector('.mark-all-read-btn').addEventListener('click', markAllAsRead);
+                    }
+
                 } else {
-                    dropdown.innerHTML = '<div class="notification-empty">No notifications</div>';
+                    notificationDropdown.innerHTML = '<div class="notification-empty">No new notifications</div>';
                 }
-            }).catch(error => console.error('Error:', error));
+            })
+            .catch(error => console.error('Error:', error));
     }
+
     function formatTime(dateString) {
         const date = new Date(dateString); const now = new Date();
         const diffMs = now - date; const diffMins = Math.floor(diffMs / 60000);
@@ -333,18 +290,13 @@ $recent_activities = getActivityLog($user_id, 5);
         const diffDays = Math.floor(diffMs / 86400000); if (diffDays < 7) return `${diffDays}d ago`;
         return date.toLocaleDateString();
     }
-    function markNotificationAsRead(notificationId) {
-        fetch('mark_notification_read.php', {
-            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `id=${notificationId}`
-        }).then(() => loadNotifications());
-    }
-    document.getElementById('notificationBell').addEventListener('click', e => {
-        e.stopPropagation(); document.getElementById('notificationDropdown').classList.toggle('active');
+
+    notificationBell.addEventListener('click', e => {
+        e.stopPropagation(); notificationDropdown.classList.toggle('active');
     });
     document.addEventListener('click', e => {
         if (!e.target.closest('.notification')) {
-            document.getElementById('notificationDropdown').classList.remove('active');
+            notificationDropdown.classList.remove('active');
         }
     });
     document.addEventListener('DOMContentLoaded', () => {
