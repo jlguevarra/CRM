@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 24, 2025 at 09:10 PM
+-- Generation Time: Sep 26, 2025 at 12:36 PM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.0.30
+-- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -133,6 +133,34 @@ CREATE TABLE `report_data` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `saved_reports`
+--
+
+CREATE TABLE `saved_reports` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `filters` text NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `saved_reports`
+--
+
+INSERT INTO `saved_reports` (`id`, `user_id`, `title`, `description`, `filters`, `created_at`) VALUES
+(3, 2, 'Tasks Report - Sep 26, 2025', 'repoorts', '{\"report_type\":\"tasks\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 08:47:33'),
+(4, 2, 'Users Report - Sep 26, 2025', 'asdadadas', '{\"report_type\":\"users\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 09:02:05'),
+(5, 2, 'Users Report - Sep 26, 2025', 'asdadadas', '{\"report_type\":\"users\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 09:05:53'),
+(6, 2, 'Customers Report - Sep 26, 2025', 'customer report', '{\"report_type\":\"customers\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 09:09:23'),
+(7, 2, 'Customers Report - Sep 26, 2025', 'customer report', '{\"report_type\":\"customers\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 10:03:32'),
+(8, 2, 'Tasks Report - Sep 26, 2025', 'mmm', '{\"report_type\":\"tasks\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 10:05:40'),
+(9, 2, 'Users Report - Sep 26, 2025', 'asssaa', '{\"report_type\":\"users\",\"date_range\":\"7\",\"start_date\":\"2025-08-27\",\"end_date\":\"2025-09-26\"}', '2025-09-26 10:29:13');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `tasks`
 --
 
@@ -215,6 +243,13 @@ ALTER TABLE `report_data`
   ADD KEY `report_id` (`report_id`);
 
 --
+-- Indexes for table `saved_reports`
+--
+ALTER TABLE `saved_reports`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
+
+--
 -- Indexes for table `tasks`
 --
 ALTER TABLE `tasks`
@@ -258,6 +293,12 @@ ALTER TABLE `report_data`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
+-- AUTO_INCREMENT for table `saved_reports`
+--
+ALTER TABLE `saved_reports`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+
+--
 -- AUTO_INCREMENT for table `tasks`
 --
 ALTER TABLE `tasks`
@@ -290,6 +331,12 @@ ALTER TABLE `reports`
 --
 ALTER TABLE `report_data`
   ADD CONSTRAINT `report_data_ibfk_1` FOREIGN KEY (`report_id`) REFERENCES `reports` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `saved_reports`
+--
+ALTER TABLE `saved_reports`
+  ADD CONSTRAINT `saved_reports_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `tasks`
