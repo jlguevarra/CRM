@@ -22,10 +22,6 @@ if (!$user) {
 $role = $user['role'];
 $user_name = $user['name'];
 
-// --- MODIFICATION REMOVED ---
-// The check that required the role to be 'admin' has been removed.
-// Now, any logged-in user can access this page.
-
 // Initialize messages
 $success_message = '';
 $error_message = '';
@@ -66,6 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get current user details for the initial form load
     $user_details = $user;
 }
+
+// Parse first and last name from the full name
+$name_parts = explode(' ', $user_details['name'] ?? '');
+$first_name = $name_parts[0] ?? '';
+$last_name = implode(' ', array_slice($name_parts, 1)) ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -75,26 +76,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Settings - CRM System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .header { background: white; padding: 18px 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
-        .header h2 { margin: 0; font-size: 24px; color: #333; }
-        .header-actions { display: flex; align-items: center; gap: 15px; }
-        .user-profile { display: flex; align-items: center; gap: 10px; }
-        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; }
-        .alert { padding: 15px; margin-bottom: 20px; border-radius: 8px; display: flex; align-items: center; gap: 10px; }
-        .alert-success { background-color: #e6f4e6; color: #27ae60; }
-        .alert-error { background-color: #ffecec; color: #dc2626; }
-        .card { background: white; padding: 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; }
-        .card-header { margin-bottom: 20px; }
-        .card-header h2 { margin: 0 0 5px 0; font-size: 20px; color: #333; }
-        .card-header p { margin: 0; color: #777; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
-        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
-        .password-wrapper { position: relative; display: flex; align-items: center; }
-        .password-wrapper input { padding-right: 40px; }
-        .toggle-password { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #999; }
-        .btn-primary { background-color: var(--primary); color: white; border: none; cursor: pointer; padding: 12px 20px; border-radius: 8px; }
+        :root {
+            --primary: #4361ee;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --danger: #dc3545;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header { 
+            background: white; 
+            padding: 18px 25px; 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .header h2 { 
+            margin: 0; 
+            font-size: 24px; 
+            color: #333; 
+        }
+        .header-actions { 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+        }
+        .user-profile { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        .user-avatar { 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            background: var(--primary); 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-weight: bold; 
+        }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: opacity 0.5s ease;
+        }
+        .alert.hiding {
+            opacity: 0;
+        }
+        .alert-success { 
+            background-color: #e6f4e6; 
+            color: #27ae60; 
+        }
+        .alert-error { 
+            background-color: #ffecec; 
+            color: #dc2626; 
+        }
+        .card { 
+            background: white; 
+            padding: 25px; 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px; 
+        }
+        .card-header { 
+            margin-bottom: 20px; 
+        }
+        .card-header h2 { 
+            margin: 0 0 5px 0; 
+            font-size: 20px; 
+            color: #333; 
+        }
+        .card-header p { 
+            margin: 0; 
+            color: #777; 
+        }
+        .form-row { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+        .form-group { 
+            margin-bottom: 20px; 
+        }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 500; 
+        }
+        .form-group input { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            box-sizing: border-box; 
+        }
+        .password-wrapper { 
+            position: relative; 
+            display: flex; 
+            align-items: center; 
+        }
+        .password-wrapper input { 
+            padding-right: 40px; 
+        }
+        .toggle-password { 
+            position: absolute; 
+            right: 15px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            cursor: pointer; 
+            color: #999; 
+        }
+        .btn-primary { 
+            background-color: var(--primary); 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            padding: 12px 20px; 
+            border-radius: 8px; 
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .btn-primary:hover {
+            background-color: #3a56d4;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -115,10 +236,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         
         <?php if (!empty($success_message)): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $success_message; ?></div>
+        <div class="alert alert-success" id="successMessage">
+            <i class="fas fa-check-circle"></i> <?php echo $success_message; ?>
+        </div>
         <?php endif; ?>
         <?php if (!empty($error_message)): ?>
-        <div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $error_message; ?></div>
+        <div class="alert alert-error" id="errorMessage">
+            <i class="fas fa-exclamation-circle"></i> <?php echo $error_message; ?>
+        </div>
         <?php endif; ?>
         
         <div class="card">
@@ -131,11 +256,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-row">
                     <div class="form-group">
                         <label for="firstName">First Name</label>
-                        <input type="text" id="firstName" name="first_name" value="<?= htmlspecialchars($user_details['first_name'] ?? ''); ?>" required>
+                        <input type="text" id="firstName" name="first_name" value="<?= htmlspecialchars($first_name); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="lastName">Last Name</label>
-                        <input type="text" id="lastName" name="last_name" value="<?= htmlspecialchars($user_details['last_name'] ?? ''); ?>" required>
+                        <input type="text" id="lastName" name="last_name" value="<?= htmlspecialchars($last_name); ?>" required>
                     </div>
                 </div>
                 <div class="form-group">
@@ -182,6 +307,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
+        // Auto-dismiss messages after 4 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            function dismissMessage(messageElement) {
+                if (messageElement) {
+                    setTimeout(function() {
+                        messageElement.classList.add('hiding');
+                        setTimeout(function() {
+                            messageElement.remove();
+                        }, 500); // Wait for fade-out animation to complete
+                    }, 4000); // 4 seconds
+                }
+            }
+            
+            dismissMessage(successMessage);
+            dismissMessage(errorMessage);
+        });
+
         // Show/Hide Password functionality
         document.querySelectorAll('.toggle-password').forEach(icon => {
             icon.addEventListener('click', function() {

@@ -90,7 +90,18 @@ if ($user_result) {
         .header-actions { display: flex; align-items: center; gap: 15px; }
         .user-profile { display: flex; align-items: center; gap: 10px; }
         .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; }
-        .alert { padding: 15px; margin-bottom: 20px; border-radius: 8px; display: flex; align-items: center; gap: 10px; }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: opacity 0.5s ease;
+        }
+        .alert.hiding {
+            opacity: 0;
+        }
         .alert-success { background-color: #e6f4e6; color: #27ae60; }
         .alert-error { background-color: #ffecec; color: #dc2626; }
         .card { background: white; padding: 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); }
@@ -150,7 +161,9 @@ if ($user_result) {
         </div>
         
         <?php if (isset($flash_message)): ?>
-        <div class="alert alert-<?php echo $flash_message['type']; ?>"><i class="fas fa-check-circle"></i> <?php echo $flash_message['text']; ?></div>
+        <div class="alert alert-<?php echo $flash_message['type']; ?>" id="flashMessage">
+            <i class="fas fa-check-circle"></i> <?php echo $flash_message['text']; ?>
+        </div>
         <?php endif; ?>
         
         <div class="card">
@@ -273,6 +286,20 @@ if ($user_result) {
     </div>
 
     <script>
+        // Auto-dismiss flash message after 4 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const flashMessage = document.getElementById('flashMessage');
+            
+            if (flashMessage) {
+                setTimeout(function() {
+                    flashMessage.classList.add('hiding');
+                    setTimeout(function() {
+                        flashMessage.remove();
+                    }, 500); // Wait for fade-out animation to complete
+                }, 4000); // 4 seconds
+            }
+        });
+
         const addTaskBtn = document.getElementById('addTaskBtn');
         const taskModal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');

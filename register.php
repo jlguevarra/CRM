@@ -186,11 +186,29 @@ if (isset($_POST['register'])) {
         }
         
         .alert {
-            padding: 12px; border-radius: 8px; margin-bottom: 20px;
-            font-size: 14px; display: flex; align-items: center; gap: 8px;
+            padding: 12px; 
+            border-radius: 8px; 
+            margin-bottom: 20px;
+            font-size: 14px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
+            transition: opacity 0.5s ease;
         }
-        .alert-error { background: #ffecec; color: #dc2626; }
-        .alert-success { background: #e6f4ea; color: #137333; }
+        
+        .alert.hiding {
+            opacity: 0;
+        }
+        
+        .alert-error { 
+            background: #ffecec; 
+            color: #dc2626; 
+        }
+        
+        .alert-success { 
+            background: #e6f4ea; 
+            color: #137333; 
+        }
         
         .login-link {
             margin-top: 25px;
@@ -239,7 +257,7 @@ if (isset($_POST['register'])) {
             <?php endif; ?>
             
             <?php if (!empty($success)): ?>
-            <div class="alert alert-success">
+            <div class="alert alert-success" id="successMessage">
                 <i class="fas fa-check-circle"></i>
                 <span><?php echo $success; ?></span>
             </div>
@@ -274,5 +292,21 @@ if (isset($_POST['register'])) {
             </div>
         </div>
     </div>
+
+    <script>
+        // Auto-dismiss success message after 4 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const successMessage = document.getElementById('successMessage');
+            
+            if (successMessage) {
+                setTimeout(function() {
+                    successMessage.classList.add('hiding');
+                    setTimeout(function() {
+                        successMessage.remove();
+                    }, 500); // Wait for fade-out animation to complete
+                }, 4000); // 4 seconds
+            }
+        });
+    </script>
 </body>
 </html>

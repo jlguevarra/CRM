@@ -19,6 +19,10 @@ if (!$user_data || $user_data['role'] !== 'admin') {
 $user_name = $user_data['name'];
 $role = $user_data['role'];
 
+// Initialize message variables
+$success_message = '';
+$error_message = '';
+
 // ADD USER
 if (isset($_POST['add_user'])) {
     $name     = $_POST['name'];
@@ -26,10 +30,33 @@ if (isset($_POST['add_user'])) {
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
     $role_add = $_POST['role'];
 
-    $stmt = $conn->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $name, $email, $password, $role_add);
-    $stmt->execute();
-    $stmt->close();
+    // Check if email already exists
+    $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+    $check_stmt->bind_param("s", $email);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        $error_message = "A user with this email already exists.";
+    } else {
+        $stmt = $conn->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $name, $email, $password, $role_add);
+        if ($stmt->execute()) {
+            $success_message = "User added successfully!";
+        } else {
+            $error_message = "Failed to add user. Please try again.";
+        }
+        $stmt->close();
+    }
+    $check_stmt->close();
+    
+    // Store messages in session for redirect
+    if ($success_message) {
+        $_SESSION['success_message'] = $success_message;
+    }
+    if ($error_message) {
+        $_SESSION['error_message'] = $error_message;
+    }
     header("Location: users.php");
     exit();
 }
@@ -41,18 +68,42 @@ if (isset($_POST['update_user'])) {
     $email = $_POST['email'];
     $role_update = $_POST['role'];
 
-    // MODIFIED: Password is now required for update
-    if (!empty($_POST['password'])) {
-        $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE users SET name=?, email=?, password=?, role=? WHERE id=?");
-        $stmt->bind_param("ssssi", $name, $email, $password, $role_update, $id);
+    // Check if email already exists (excluding current user)
+    $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+    $check_stmt->bind_param("si", $email, $id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        $error_message = "A user with this email already exists.";
     } else {
-        // This 'else' block is now less likely to be hit due to 'required' in HTML, but is good for safety.
-        $stmt = $conn->prepare("UPDATE users SET name=?, email=?, role=? WHERE id=?");
-        $stmt->bind_param("sssi", $name, $email, $role_update, $id);
+        // MODIFIED: Password is now required for update
+        if (!empty($_POST['password'])) {
+            $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("UPDATE users SET name=?, email=?, password=?, role=? WHERE id=?");
+            $stmt->bind_param("ssssi", $name, $email, $password, $role_update, $id);
+        } else {
+            // This 'else' block is now less likely to be hit due to 'required' in HTML, but is good for safety.
+            $stmt = $conn->prepare("UPDATE users SET name=?, email=?, role=? WHERE id=?");
+            $stmt->bind_param("sssi", $name, $email, $role_update, $id);
+        }
+        
+        if ($stmt->execute()) {
+            $success_message = "User updated successfully!";
+        } else {
+            $error_message = "Failed to update user. Please try again.";
+        }
+        $stmt->close();
     }
-    $stmt->execute();
-    $stmt->close();
+    $check_stmt->close();
+    
+    // Store messages in session for redirect
+    if ($success_message) {
+        $_SESSION['success_message'] = $success_message;
+    }
+    if ($error_message) {
+        $_SESSION['error_message'] = $error_message;
+    }
     header("Location: users.php");
     exit();
 }
@@ -63,11 +114,28 @@ if (isset($_GET['delete'])) {
     if ($id !== $_SESSION['user_id']) {
         $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
         $stmt->bind_param("i", $id);
-        $stmt->execute();
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "User deleted successfully!";
+        } else {
+            $_SESSION['error_message'] = "Failed to delete user. Please try again.";
+        }
         $stmt->close();
+    } else {
+        $_SESSION['error_message'] = "You cannot delete your own account.";
     }
     header("Location: users.php");
     exit();
+}
+
+// Check for session messages
+if (isset($_SESSION['success_message'])) {
+    $success_message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+
+if (isset($_SESSION['error_message'])) {
+    $error_message = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
 }
 
 // --- SEARCH FILTER ---
@@ -102,31 +170,192 @@ if (isset($_GET['edit'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <title>Manage Users</title>
     <style>
-        .header { background: white; padding: 18px 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
-        .header h2 { margin: 0; font-size: 24px; color: #333; }
-        .header-actions { display: flex; align-items: center; gap: 15px; }
-        .user-profile { display: flex; align-items: center; gap: 10px; }
-        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; }
-        .card { background: white; padding: 25px; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 25px; }
-        .card h3 { margin-top: 0; margin-bottom: 20px; font-size: 20px; color: #333; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
-        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; text-decoration: none; display: inline-block; }
-        .btn-primary { background-color: var(--primary); color: white; }
-        .btn-secondary { background-color: #f1f5f9; color: #334155; }
-        .btn-edit { background: #fff4e6; color: #d97706; padding: 8px 16px; font-size: 13px; }
-        .btn-delete { background: #ffecec; color: #dc2626; padding: 8px 16px; font-size: 13px; }
-        .search-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-        .search-bar input { flex-grow: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        table th, table td { padding: 16px; text-align: left; border-bottom: 1px solid #eee; }
-        table th { background: #f8f9fa; color: #555; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-        table tr:hover { background-color: #f9fafb; }
-        .role-badge { padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
-        .role-admin { background-color: #e6f4ff; color: var(--primary); }
-        .role-user { background-color: #f1f5f9; color: #555; }
-        .action-cell { display: flex; gap: 10px; }
+        :root {
+            --primary: #4361ee;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --danger: #dc3545;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header { 
+            background: white; 
+            padding: 18px 25px; 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .header h2 { 
+            margin: 0; 
+            font-size: 24px; 
+            color: #333; 
+        }
+        .header-actions { 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+        }
+        .user-profile { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        .user-avatar { 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            background: var(--primary); 
+            color: white; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-weight: bold; 
+        }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: opacity 0.5s ease;
+        }
+        .alert.hiding {
+            opacity: 0;
+        }
+        .alert-success { 
+            background-color: #e6f4e6; 
+            color: #27ae60; 
+        }
+        .alert-error { 
+            background-color: #ffecec; 
+            color: #dc2626; 
+        }
+        .card { 
+            background: white; 
+            padding: 25px; 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px; 
+        }
+        .card h3 { 
+            margin-top: 0; 
+            margin-bottom: 20px; 
+            font-size: 20px; 
+            color: #333; 
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 500; 
+        }
+        .form-group input, .form-group select { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            box-sizing: border-box; 
+        }
+        .btn { 
+            padding: 12px 20px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 500; 
+            text-decoration: none; 
+            display: inline-block; 
+        }
+        .btn-primary { 
+            background-color: var(--primary); 
+            color: white; 
+        }
+        .btn-secondary { 
+            background-color: #f1f5f9; 
+            color: #334155; 
+        }
+        .btn-edit { 
+            background: #fff4e6; 
+            color: #d97706; 
+            padding: 8px 16px; 
+            font-size: 13px; 
+        }
+        .btn-delete { 
+            background: #ffecec; 
+            color: #dc2626; 
+            padding: 8px 16px; 
+            font-size: 13px; 
+        }
+        .search-bar { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            margin-bottom: 20px; 
+        }
+        .search-bar input { 
+            flex-grow: 1; 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid #ddd; 
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+        }
+        table th, table td { 
+            padding: 16px; 
+            text-align: left; 
+            border-bottom: 1px solid #eee; 
+        }
+        table th { 
+            background: #f8f9fa; 
+            color: #555; 
+            font-size: 12px; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+        }
+        table tr:hover { 
+            background-color: #f9fafb; 
+        }
+        .role-badge { 
+            padding: 4px 10px; 
+            border-radius: 15px; 
+            font-size: 12px; 
+            font-weight: bold; 
+        }
+        .role-admin { 
+            background-color: #e6f4ff; 
+            color: var(--primary); 
+        }
+        .role-user { 
+            background-color: #f1f5f9; 
+            color: #555; 
+        }
+        .action-cell { 
+            display: flex; 
+            gap: 10px; 
+        }
+        
+        @media (max-width: 768px) {
+            .search-bar {
+                flex-direction: column;
+            }
+            .search-bar input {
+                width: 100%;
+            }
+            .action-cell {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
@@ -145,6 +374,19 @@ if (isset($_GET['edit'])) {
                 </div>
             </div>
         </div>
+        
+        <?php if (!empty($success_message)): ?>
+        <div class="alert alert-success" id="successMessage">
+            <i class="fas fa-check-circle"></i> <?php echo $success_message; ?>
+        </div>
+        <?php endif; ?>
+        
+        <?php if (!empty($error_message)): ?>
+        <div class="alert alert-error" id="errorMessage">
+            <i class="fas fa-exclamation-circle"></i> <?php echo $error_message; ?>
+        </div>
+        <?php endif; ?>
+        
         <div class="card">
             <h3><?php echo $editUser ? 'Edit User' : 'Add New User'; ?></h3>
             <form method="POST">
@@ -209,7 +451,7 @@ if (isset($_GET['edit'])) {
                         <td class="action-cell">
                             <?php if ($row['id'] != $_SESSION['user_id']): ?>
                                 <a href="users.php?edit=<?= $row['id']; ?>" class="btn btn-edit"><i class="fas fa-edit"></i> Edit</a>
-                                <a href="users.php?delete=<?= $row['id']; ?>" class="btn btn-delete" onclick="return confirm('Delete this user?');"><i class="fas fa-trash"></i> Delete</a>
+                                <a href="users.php?delete=<?= $row['id']; ?>" class="btn btn-delete" onclick="return confirm('Are you sure you want to delete this user?');"><i class="fas fa-trash"></i> Delete</a>
                             <?php else: ?>
                                 <em>(You)</em>
                             <?php endif; ?>
@@ -220,5 +462,27 @@ if (isset($_GET['edit'])) {
             </table>
         </div>
     </div>
+
+    <script>
+        // Auto-dismiss messages after 4 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            function dismissMessage(messageElement) {
+                if (messageElement) {
+                    setTimeout(function() {
+                        messageElement.classList.add('hiding');
+                        setTimeout(function() {
+                            messageElement.remove();
+                        }, 500); // Wait for fade-out animation to complete
+                    }, 4000); // 4 seconds
+                }
+            }
+            
+            dismissMessage(successMessage);
+            dismissMessage(errorMessage);
+        });
+    </script>
 </body>
 </html>

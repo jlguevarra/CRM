@@ -179,13 +179,51 @@ function getUserDetails($user_id) {
     return null;
 }
 
-function updateUserProfile($user_id, $data) {
+function updateUserProfile($user_id, $profile_data) {
     global $conn;
-    $full_name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
-    $sql = "UPDATE users SET name = ?, email = ?, phone = ?, position = ?, bio = ? WHERE id = ?";
+    
+    // Build the update query based on available fields
+    $fields = [];
+    $params = [];
+    $types = '';
+    
+    if (isset($profile_data['first_name']) && isset($profile_data['last_name'])) {
+        $fields[] = "name = ?";
+        $params[] = trim($profile_data['first_name'] . ' ' . $profile_data['last_name']);
+        $types .= 's';
+    }
+    
+    if (isset($profile_data['email'])) {
+        $fields[] = "email = ?";
+        $params[] = $profile_data['email'];
+        $types .= 's';
+    }
+    
+    // Only update bio if the column exists in your table
+    // If you don't have a bio column, remove this section
+    // if (isset($profile_data['bio'])) {
+    //     $fields[] = "bio = ?";
+    //     $params[] = $profile_data['bio'];
+    //     $types .= 's';
+    // }
+    
+    if (empty($fields)) {
+        return false;
+    }
+    
+    $fields[] = "updated_at = NOW()";
+    $params[] = $user_id;
+    $types .= 'i';
+    
+    $sql = "UPDATE users SET " . implode(', ', $fields) . " WHERE id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssssi", $full_name, $data['email'], $data['phone'], $data['position'], $data['bio'], $user_id);
-    return $stmt->execute();
+    
+    if ($stmt) {
+        $stmt->bind_param($types, ...$params);
+        return $stmt->execute();
+    }
+    
+    return false;
 }
 
 function updatePassword($user_id, $current_password, $new_password) {

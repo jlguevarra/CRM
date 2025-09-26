@@ -19,6 +19,10 @@ if (!$user) {
 $role = $user['role'];
 $user_name = $user['name'];
 
+// Initialize message variables
+$success_message = '';
+$error_message = '';
+
 // ADD CUSTOMER
 if (isset($_POST['add_customer'])) {
     $name    = $_POST['name'];
@@ -26,10 +30,33 @@ if (isset($_POST['add_customer'])) {
     $phone   = $_POST['phone'];
     $address = $_POST['address'];
 
-    $stmt = $conn->prepare("INSERT INTO customers (name, email, phone, address) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $name, $email, $phone, $address);
-    $stmt->execute();
-    $stmt->close();
+    // Check if customer with same email already exists
+    $check_stmt = $conn->prepare("SELECT id FROM customers WHERE email = ?");
+    $check_stmt->bind_param("s", $email);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0 && !empty($email)) {
+        $error_message = "A customer with this email already exists.";
+    } else {
+        $stmt = $conn->prepare("INSERT INTO customers (name, email, phone, address) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $name, $email, $phone, $address);
+        if ($stmt->execute()) {
+            $success_message = "Customer added successfully!";
+        } else {
+            $error_message = "Failed to add customer. Please try again.";
+        }
+        $stmt->close();
+    }
+    $check_stmt->close();
+    
+    // Store messages in session for redirect
+    if ($success_message) {
+        $_SESSION['success_message'] = $success_message;
+    }
+    if ($error_message) {
+        $_SESSION['error_message'] = $error_message;
+    }
     header("Location: customers.php"); 
     exit();
 }
@@ -39,10 +66,25 @@ if (isset($_GET['delete'])) {
     $id = $_GET['delete'];
     $stmt = $conn->prepare("DELETE FROM customers WHERE id = ?");
     $stmt->bind_param("i", $id);
-    $stmt->execute();
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Customer deleted successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to delete customer. Please try again.";
+    }
     $stmt->close();
     header("Location: customers.php");
     exit();
+}
+
+// Check for session messages
+if (isset($_SESSION['success_message'])) {
+    $success_message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+
+if (isset($_SESSION['error_message'])) {
+    $error_message = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
 }
 
 // --- SEARCH FILTER ---
@@ -67,6 +109,7 @@ if (!empty($search_term)) {
     <title>Manage Customers</title>
     <style>
         :root {
+            --primary: #4361ee;
             --secondary: #6c757d;
             --success: #28a745;
             --warning: #ffc107;
@@ -76,58 +119,185 @@ if (!empty($search_term)) {
         }
 
         .header {
-            background: white; padding: 18px 25px; border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow); margin-bottom: 25px; display: flex;
-            justify-content: space-between; align-items: center;
+            background: white; 
+            padding: 18px 25px; 
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px; 
+            display: flex;
+            justify-content: space-between; 
+            align-items: center;
         }
-        .header h2 { margin: 0; font-size: 24px; color: #333; }
-        .header-actions { display: flex; align-items: center; gap: 15px; }
-        .user-profile { display: flex; align-items: center; gap: 10px; }
+        .header h2 { 
+            margin: 0; 
+            font-size: 24px; 
+            color: #333; 
+        }
+        .header-actions { 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+        }
+        .user-profile { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
         .user-avatar {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: var(--primary); color: white;
-            display: flex; justify-content: center; align-items: center; font-weight: bold;
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%;
+            background: var(--primary); 
+            color: white;
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-weight: bold;
+        }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+            transition: opacity 0.5s ease;
+        }
+        .alert.hiding {
+            opacity: 0;
+        }
+        .alert-success { 
+            background-color: #e6f4e6; 
+            color: #27ae60; 
+        }
+        .alert-error { 
+            background-color: #ffecec; 
+            color: #dc2626; 
         }
         .card {
-            background: white; padding: 25px; border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow); margin-bottom: 25px;
+            background: white; 
+            padding: 25px; 
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow); 
+            margin-bottom: 25px;
         }
-        .card h3 { margin-top: 0; margin-bottom: 20px; font-size: 20px; color: #333; }
+        .card h3 { 
+            margin-top: 0; 
+            margin-bottom: 20px; 
+            font-size: 20px; 
+            color: #333; 
+        }
         
-        table { width: 100%; border-collapse: collapse; }
-        table th, table td { padding: 16px; text-align: left; border-bottom: 1px solid #eee; }
-        table th {
-            background: #f8f9fa; color: #555; font-size: 12px;
-            font-weight: 600; text-transform: uppercase;
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
         }
-        table tr:hover { background-color: #f9fafb; }
-        .action-cell { display: flex; gap: 10px; }
+        table th, table td { 
+            padding: 16px; 
+            text-align: left; 
+            border-bottom: 1px solid #eee; 
+        }
+        table th {
+            background: #f8f9fa; 
+            color: #555; 
+            font-size: 12px;
+            font-weight: 600; 
+            text-transform: uppercase;
+        }
+        table tr:hover { 
+            background-color: #f9fafb; 
+        }
+        .action-cell { 
+            display: flex; 
+            gap: 10px; 
+        }
         
         .btn {
-            padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
-            font-size: 14px; text-decoration: none; display: inline-flex;
-            align-items: center; gap: 5px; font-weight: 500; transition: opacity 0.2s;
+            padding: 8px 16px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer;
+            font-size: 14px; 
+            text-decoration: none; 
+            display: inline-flex;
+            align-items: center; 
+            gap: 5px; 
+            font-weight: 500; 
+            transition: opacity 0.2s;
         }
-        .btn:hover { opacity: 0.85; }
-        .btn-edit { background: #fff4e6; color: #d97706; }
-        .btn-delete { background: #ffecec; color: #dc2626; }
+        .btn:hover { 
+            opacity: 0.85; 
+        }
+        .btn-edit { 
+            background: #fff4e6; 
+            color: #d97706; 
+        }
+        .btn-delete { 
+            background: #ffecec; 
+            color: #dc2626; 
+        }
         .btn-add {
-            background: var(--success); color: white; padding: 12px 18px;
-            border-radius: 8px; font-weight: bold;
+            background: var(--success); 
+            color: white; 
+            padding: 12px 18px;
+            border-radius: 8px; 
+            font-weight: bold;
         }
         
         input, textarea {
-            width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd;
-            border-radius: 8px; font-size: 14px; box-sizing: border-box;
+            width: 100%; 
+            padding: 12px; 
+            margin-bottom: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 8px; 
+            font-size: 14px; 
+            box-sizing: border-box;
         }
-        textarea { min-height: 80px; resize: vertical; }
+        textarea { 
+            min-height: 80px; 
+            resize: vertical; 
+        }
 
-        .search-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-        .search-bar input { flex: 1; margin: 0; }
-        .search-bar .btn-add { margin-top: 0; background-color: var(--primary); padding: 12px 18px; }
+        .search-bar { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            margin-bottom: 20px; 
+        }
+        .search-bar input { 
+            flex: 1; 
+            margin: 0; 
+        }
+        .search-bar .btn-add { 
+            margin-top: 0; 
+            background-color: var(--primary); 
+            padding: 12px 18px; 
+        }
         .cancel-btn {
-            padding: 12px 18px; border-radius: 8px; background: #f1f5f9;
-            color: #334155; text-decoration: none; font-weight: 500;
+            padding: 12px 18px; 
+            border-radius: 8px; 
+            background: #f1f5f9;
+            color: #334155; 
+            text-decoration: none; 
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .search-bar {
+                flex-direction: column;
+            }
+            .search-bar input {
+                width: 100%;
+            }
+            .action-cell {
+                flex-direction: column;
+            }
+            table {
+                font-size: 14px;
+            }
+            table th, table td {
+                padding: 12px 8px;
+            }
         }
     </style>
 </head>
@@ -149,6 +319,18 @@ if (!empty($search_term)) {
                 </div>
             </div>
         </div>
+        
+        <?php if (!empty($success_message)): ?>
+        <div class="alert alert-success" id="successMessage">
+            <i class="fas fa-check-circle"></i> <?php echo $success_message; ?>
+        </div>
+        <?php endif; ?>
+        
+        <?php if (!empty($error_message)): ?>
+        <div class="alert alert-error" id="errorMessage">
+            <i class="fas fa-exclamation-circle"></i> <?php echo $error_message; ?>
+        </div>
+        <?php endif; ?>
         
         <div class="card">
             <h3>Add New Customer</h3>
@@ -191,7 +373,7 @@ if (!empty($search_term)) {
                         <td><?= htmlspecialchars($row['address']); ?></td>
                         <td class="action-cell">
                             <a href="edit_customer.php?id=<?= $row['id']; ?>" class="btn btn-edit"><i class="fas fa-pencil-alt"></i> Edit</a>
-                            <a href="customers.php?delete=<?= $row['id']; ?>" class="btn btn-delete" onclick="return confirm('Delete this customer?');"><i class="fas fa-trash"></i> Delete</a>
+                            <a href="customers.php?delete=<?= $row['id']; ?>" class="btn btn-delete" onclick="return confirm('Are you sure you want to delete this customer?');"><i class="fas fa-trash"></i> Delete</a>
                         </td>
                     </tr>
                     <?php } ?>
@@ -199,5 +381,27 @@ if (!empty($search_term)) {
             </table>
         </div>
     </div>
+
+    <script>
+        // Auto-dismiss messages after 4 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            function dismissMessage(messageElement) {
+                if (messageElement) {
+                    setTimeout(function() {
+                        messageElement.classList.add('hiding');
+                        setTimeout(function() {
+                            messageElement.remove();
+                        }, 500); // Wait for fade-out animation to complete
+                    }, 4000); // 4 seconds
+                }
+            }
+            
+            dismissMessage(successMessage);
+            dismissMessage(errorMessage);
+        });
+    </script>
 </body>
 </html>
